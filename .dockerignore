@@ -1,0 +1,35 @@
+# Gitignore para Docker y desarrollo
+
+# Docker
+.dockerignore
+Dockerfile
+
+# Maven
+target/
+*.jar
+*.war
+*.ear
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build
+build/
+dist/
+
+# Temporary
+*.tmp
+*.temp
+.cache/
+
