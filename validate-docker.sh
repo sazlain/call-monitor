@@ -114,7 +114,7 @@ if [ $ERRORS -eq 0 ]; then
     echo "🚀 Próximos pasos:"
     echo "  1. Ejecuta: ./docker.sh up"
     echo "  2. Espera a que carguen los servicios"
-    echo "  3. Accede a: http://localhost:8086/swagger-ui.html"
+    echo "  3. Accede a: http://localhost/swagger-ui.html"
     exit 0
 else
     echo -e "${RED}❌ Se encontraron $ERRORS error(es) en la configuración${NC}"

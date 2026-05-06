@@ -52,7 +52,7 @@ services:
       - call-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8086/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3

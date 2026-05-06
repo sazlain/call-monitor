@@ -23,7 +23,7 @@
 ✓ PostgreSQL como BD
 ✓ Configuración por propiedades
 ✓ Manejo de archivos (50MB max)
-✓ Puerto: 8086
+✓ Puerto: 80
 ```
 
 ### Dependencias Principales

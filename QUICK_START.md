@@ -8,7 +8,7 @@ cd /Users/azlainsaavedra/projects/call
 ```
 
 Espera 20-30 segundos y accede a:
-👉 **http://localhost:8086/swagger-ui.html**
+👉 **http://localhost/swagger-ui.html**
 
 ## 🎯 Comandos Más Usados
 

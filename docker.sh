@@ -49,9 +49,9 @@ case "${1:-help}" in
         print_success "Servicios iniciados"
         echo ""
         echo -e "${YELLOW}URLs disponibles:${NC}"
-        echo "  • Swagger UI: http://localhost:8086/swagger-ui.html"
-        echo "  • API Docs:   http://localhost:8086/v3/api-docs"
-        echo "  • Health:     http://localhost:8086/actuator/health"
+        echo "  • Swagger UI: http://localhost/swagger-ui.html"
+        echo "  • API Docs:   http://localhost/v3/api-docs"
+        echo "  • Health:     http://localhost/actuator/health"
         echo ""
         ;;
 

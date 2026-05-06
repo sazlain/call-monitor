@@ -203,11 +203,11 @@ Código en ./src/
         ↓
 Maven: build (en contenedor)
         ↓
-Spring Boot: start (puerto 8086)
+Spring Boot: start (puerto 8080)
         ↓
 PostgreSQL: connecta (desde contenedor)
         ↓
-http://localhost:8086/swagger-ui.html
+http://localhost/swagger-ui.html
 ```
 
 ### Flujo: Backup/Restore
@@ -300,7 +300,7 @@ docker-compose build
 ```
 docker-compose up -d
 ├─ Contenedor db: PostgreSQL escuchando :5432
-├─ Contenedor app: Spring Boot escuchando :8086
+├─ Contenedor app: Spring Boot escuchando :8080
 └─ Volumen postgres_data: conectado
 ```
 

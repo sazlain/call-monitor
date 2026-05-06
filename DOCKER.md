@@ -56,15 +56,15 @@ docker-compose ps
 **Salida esperada:**
 ```
 NAME         COMMAND                  SERVICE   STATUS           PORTS
-call-app     "java -jar app.jar"      app       Up 2 minutes     0.0.0.0:8086->8086/tcp
+call-app     "java -jar app.jar"      app       Up 2 minutes     0.0.0.0:80->8080/tcp
 call-db      "docker-entrypoint…"     db        Up 2 minutes     0.0.0.0:5432->5432/tcp
 ```
 
 ### 4. Acceder a la aplicación
 
-- **Swagger UI**: http://localhost:8086/swagger-ui.html
-- **API Docs**: http://localhost:8086/v3/api-docs
-- **Health Check**: http://localhost:8086/actuator/health
+- **Swagger UI**: http://localhost/swagger-ui.html
+- **API Docs**: http://localhost/v3/api-docs
+- **Health Check**: http://localhost/actuator/health
 
 ### 5. Detener servicios
 
@@ -77,12 +77,12 @@ docker-compose down
 Archivo `.env.docker` contiene:
 
 | Variable | Valor por Defecto | Descripción |
-|----------|------------------|-------------|
+|----------|----------------|-------------|
 | `POSTGRES_USER` | `calluser` | Usuario de PostgreSQL |
 | `POSTGRES_PASSWORD` | `callpassword` | Contraseña de PostgreSQL |
 | `POSTGRES_DB` | `calldb` | Nombre de base de datos |
 | `POSTGRES_PORT` | `5432` | Puerto de PostgreSQL |
-| `APP_PORT` | `8086` | Puerto de la aplicación |
+| `APP_PORT` | `80` | Puerto de la aplicación |
 | `ENVIRONMENT` | `docker` | Ambiente de ejecución |
 
 ### Personalizar Variables

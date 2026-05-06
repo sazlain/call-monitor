@@ -18,7 +18,7 @@ cd /Users/azlainsaavedra/projects/call
 ./docker.sh up
 ```
 
-✅ **Listo**. Espera 20-30 seg y accede a http://localhost:8086
+✅ **Listo**. Espera 20-30 seg y accede a http://localhost
 
 ---
 
