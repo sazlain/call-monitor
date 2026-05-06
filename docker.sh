@@ -45,7 +45,7 @@ case "${1:-help}" in
             exit 1
         fi
 
-        docker-compose --env-file "$ENV_FILE" up -d
+        docker compose --env-file "$ENV_FILE" up -d
         print_success "Servicios iniciados"
         echo ""
         echo -e "${YELLOW}URLs disponibles:${NC}"
@@ -57,40 +57,40 @@ case "${1:-help}" in
 
     down)
         print_header "Deteniendo servicios Docker"
-        docker-compose down
+        docker compose down
         print_success "Servicios detenidos"
         ;;
 
     restart)
         print_header "Reiniciando servicios Docker"
-        docker-compose restart
+        docker compose restart
         print_success "Servicios reiniciados"
         ;;
 
     rebuild)
         print_header "Reconstruyendo imagen de aplicación"
-        docker-compose build --no-cache
+        docker compose build --no-cache
         print_success "Imagen reconstruida"
         ;;
 
     logs)
         print_header "Logs de servicios (últimas 50 líneas)"
-        docker-compose logs --tail=50 -f
+        docker compose logs --tail=50 -f
         ;;
 
     logs-app)
         print_header "Logs de la aplicación"
-        docker-compose logs -f app
+        docker compose logs -f app
         ;;
 
     logs-db)
         print_header "Logs de la base de datos"
-        docker-compose logs -f db
+        docker compose logs -f db
         ;;
 
     ps)
         print_header "Estado de servicios"
-        docker-compose ps
+        docker compose ps
         ;;
 
     clean)
@@ -99,7 +99,7 @@ case "${1:-help}" in
         read -p "¿Estás seguro? (s/n): " confirm
 
         if [ "$confirm" = "s" ]; then
-            docker-compose down -v
+            docker compose down -v
             docker rmi call-app:latest 2>/dev/null || true
             print_success "Limpieza completada"
         else
