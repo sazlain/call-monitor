@@ -22,11 +22,11 @@ WORKDIR /app
 COPY --from=builder /app/target/call-*.jar app.jar
 
 # Configurar puerto
-EXPOSE 8086
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8086/actuator/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
 
 # Ejecutar la aplicación
 ENTRYPOINT ["java", "-jar", "app.jar"]
