@@ -33,6 +33,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-calldb}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-calluser}
