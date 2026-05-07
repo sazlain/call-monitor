@@ -50,9 +50,9 @@ public class OAuthController {
             MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
             body.add("grant_type", "authorization_code");
             body.add("code", code);
-            body.add("redirect_uri", "https://tu-dominio.com/oauth/callback");
-            body.add("client_id", "1h5zrB5");
-            body.add("client_secret", "gejg8jUCBK6o3CoqqNnSyCuJh6DEEmS1");
+            body.add("redirect_uri", "https://llamadasdev.homezafiro.com/oauth/callback");
+            body.add("client_id", "65qEWF0Q");
+            body.add("client_secret", "qQtdG9iHzsKcBqEC0CBwY3zpKCDCMe6Q");
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
