@@ -8,6 +8,7 @@ import com.monitor.call.infrastructure.mappers.CallEventMapper;
 import com.monitor.call.infrastructure.requests.CallEventRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,7 +27,7 @@ public class CallEventListenerController {
         this.callEventListenerUseCases = callEventListenerUseCases;
     }
 
-    @PostMapping("/started")
+    @PostMapping(value = "events", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public ResponseEntity<CallEventListenerResponse> hello(@RequestBody CallEventRequest request) {
         logger.info("Received request for /api/hello");
         CallEvent callEvent = CallEventMapper.requestToDomain(request); // Aquí deberías mapear el request a un CallEvent real
