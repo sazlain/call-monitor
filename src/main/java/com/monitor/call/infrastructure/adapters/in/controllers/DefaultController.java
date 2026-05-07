@@ -1,4 +1,4 @@
-package com.monitor.call;
+package com.monitor.call.infrastructure.adapters.in.controllers;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

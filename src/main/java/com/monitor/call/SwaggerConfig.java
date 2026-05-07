@@ -18,7 +18,7 @@ public class SwaggerConfig {
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()
-                .info(new Info().title("Call Manager API")
+                .info(new Info().title("Call Monitor API")
                         .description("API REST para seguimiento de llamadas")
                         .version("1.0.0")
                         .contact(new Contact().name("Azlain Saavedra").email("azlain.saavedra@gmail.com"))
