@@ -51,8 +51,8 @@ public class OAuthController {
             body.add("grant_type", "authorization_code");
             body.add("code", code);
             body.add("redirect_uri", "https://llamadasdev.homezafiro.com/oauth/callback");
-            body.add("client_id", "65qEWF0Q");
-            body.add("client_secret", "qQtdG9iHzsKcBqEC0CBwY3zpKCDCMe6Q");
+            body.add("client_id", "65M1mh14");
+            body.add("client_secret", "IUB3o9Vedpr5JWyNYWuOiHtUJ74ql4wJ");
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
