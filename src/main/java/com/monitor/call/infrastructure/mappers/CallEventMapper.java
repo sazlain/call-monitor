@@ -7,11 +7,7 @@ import com.monitor.call.domain.responses.CallEventListenerResponse;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.CallEventEntity;
 import com.monitor.call.infrastructure.requests.CallEventRequest;
 
-import java.util.HashMap;
 import java.util.Map;
-
-import static com.monitor.call.domain.enums.CallFlow.IN;
-import static com.monitor.call.domain.enums.CallStatus.CALLING;
 
 public class CallEventMapper {
 
@@ -69,16 +65,16 @@ public class CallEventMapper {
 
     public static CallEventRequest payloadToRequest(Map<String, String> payload) {
         return CallEventRequest.builder()
-                .callId(payload.get("callId"))
-                .callerIdNum(payload.get("callerIdNum"))
-                .callerIdName(payload.get("callerIdName"))
-                .calledDID(payload.get("calledDID"))
-                .calledExtension(payload.get("calledExtension"))
-                .callStatus(payload.get("callStatus"))
-                .callFlow(payload.get("callFlow"))
-                .callerExtension(payload.get("callerExtension"))
-                .calledNumber(payload.get("calledNumber"))
-                .callAPIID(payload.get("callAPIID"))
+                .callId(payload.get("CallID"))
+                .callerIdNum(payload.get("CallerIDNum"))
+                .callerIdName(payload.get("CallerIDName"))
+                .calledDID(payload.get("CalledDID"))
+                .calledExtension(payload.get("CalledExtension"))
+                .callStatus(payload.get("CallStatus"))
+                .callFlow(payload.get("CallFlow"))
+                .callerExtension(payload.get("CallerExtension"))
+                .calledNumber(payload.get("CalledNumber"))
+                .callAPIID(payload.get("CallAPIID"))
                 .build();
     }
 }
