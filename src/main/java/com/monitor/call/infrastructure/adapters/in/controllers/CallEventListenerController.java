@@ -27,7 +27,7 @@ public class CallEventListenerController {
         this.callEventListenerUseCases = callEventListenerUseCases;
     }
 
-    @PostMapping(value = "events", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    @PostMapping(value = "started", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public ResponseEntity<CallEventListenerResponse> hello(@RequestBody CallEventRequest request) {
         logger.info("Received request for /api/hello");
         CallEvent callEvent = CallEventMapper.requestToDomain(request); // Aquí deberías mapear el request a un CallEvent real
