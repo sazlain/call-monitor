@@ -2,12 +2,14 @@ package com.monitor.call.infrastructure.requests;
 
 import com.google.gson.Gson;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class CallEventRequest {
 
     private String callId;
