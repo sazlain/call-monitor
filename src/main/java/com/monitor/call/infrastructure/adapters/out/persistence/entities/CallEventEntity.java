@@ -8,6 +8,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "call_events")
@@ -18,7 +22,10 @@ import lombok.NoArgsConstructor;
 public class CallEventEntity {
 
     @Id
-    @Column(name = "call_id", nullable = false, unique = true)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "call_id")
     private String callId;
 
     @Column(name = "caller_id_num")
@@ -49,4 +56,12 @@ public class CallEventEntity {
 
     @Column(name = "call_api_id")
     private String callAPIID;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
 }
