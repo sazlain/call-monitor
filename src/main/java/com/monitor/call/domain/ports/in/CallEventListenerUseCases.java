@@ -4,5 +4,9 @@ import com.monitor.call.domain.models.CallEvent;
 import com.monitor.call.domain.responses.CallEventListenerResponse;
 
 public interface CallEventListenerUseCases {
-    public CallEventListenerResponse onCallStarted(CallEvent callEvent);
+    /** Mantiene onCallStarted por compatibilidad pero delega a onCallEvent */
+    CallEventListenerResponse onCallStarted(CallEvent callEvent);
+
+    /** Nuevo metodo unificado — maneja todos los CallStatus */
+    CallEventListenerResponse onCallEvent(CallEvent callEvent);
 }
