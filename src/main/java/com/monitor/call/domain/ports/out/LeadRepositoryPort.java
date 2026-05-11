@@ -14,6 +14,8 @@ public interface LeadRepositoryPort {
     List<Lead> findByOwnerIdAndStatus(Long ownerId, LeadStatus status);
     List<Lead> findByOwnerAndDateRange(Long ownerId, LocalDate from, LocalDate to);
     List<Lead> findAssignedPendingLeads(Long agentId);
-    List<Lead> findPendingCallbacks(LocalDate today, Long userId, Long agentId);
+    List<Lead> findPendingCallbacks(Long userId, Long agentId);
     List<Object[]> countByStatusForOwner(Long ownerId);
+    Optional<Lead> findActiveByPhone(String phone);
+    void updateStatus(Long leadId, LeadStatus status);
 }

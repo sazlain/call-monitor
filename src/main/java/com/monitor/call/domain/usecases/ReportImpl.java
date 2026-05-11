@@ -249,7 +249,7 @@ public class ReportImpl implements ReportUseCases {
 
         LocalDate today = LocalDate.now();
         Long agentId = agentRepo.findByUserId(userId).map(a -> a.getId()).orElse(-1L);
-        List<LeadEntity> callbacks = leadRepo.findPendingCallbacks(today.plusYears(1), userId, agentId);
+        List<LeadEntity> callbacks = leadRepo.findPendingCallbacks( userId, agentId);
 
         String[] header = {
             "Contacto", "Telefono", "Origen", "Agente asignado",

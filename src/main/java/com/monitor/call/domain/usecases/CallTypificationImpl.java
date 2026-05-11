@@ -41,8 +41,11 @@ public class CallTypificationImpl implements CallTypificationUseCases {
     @Override
     @Transactional
     public CallTypificationResponse typify(CallTypificationRequest request, Long agentId) {
-        if (typRepo.existsByCallId(request.getCallId()))
-            throw new RuntimeException("La llamada " + request.getCallId() + " ya fue tipificada");
+
+        // Si ya existe, actualizar en vez de rechazar (upsert)
+        if (typRepo.existsByCallId(request.getCallId())) {
+            return updateTypification(request.getCallId(), request, agentId);
+        }
 
         CallTypification typification = CallTypification.builder()
                 .callId(request.getCallId())
@@ -56,7 +59,8 @@ public class CallTypificationImpl implements CallTypificationUseCases {
                 .build();
 
         CallTypification saved = typRepo.save(typification);
-        logger.info("Llamada tipificada: callId={} result={} agentId={}", request.getCallId(), request.getResult(), agentId);
+        logger.info("Llamada tipificada: callId={} result={} agentId={}",
+                request.getCallId(), request.getResult(), agentId);
 
         // Actualizar status del lead automaticamente segun el resultado
         if (request.getLeadId() != null) {
@@ -112,11 +116,13 @@ public class CallTypificationImpl implements CallTypificationUseCases {
      */
     private void updateLeadStatusFromResult(Long leadId, CallResult result, java.time.LocalDate callbackDate) {
         LeadStatus newStatus = switch (result) {
-            case SALE         -> LeadStatus.CONVERTED;
-            case INTERESTED   -> LeadStatus.INTERESTED;
-            case CALLBACK     -> LeadStatus.CALLBACK;
-            case NOT_INTERESTED, WRONG_NUMBER -> LeadStatus.DISCARDED;
-            case NO_ANSWER, VOICEMAIL, OTHER  -> LeadStatus.CONTACTED;
+            case SALE                                  -> LeadStatus.CONVERTED;
+            case INTERESTED                            -> LeadStatus.INTERESTED;
+            case CALLBACK                              -> LeadStatus.CALLBACK;
+            case APPOINTMENT, APPOINTMENT_RESCHEDULE   -> LeadStatus.APPOINTMENT;
+            case APPOINTMENT_CANCEL                    -> LeadStatus.INTERESTED;
+            case NOT_INTERESTED, WRONG_NUMBER          -> LeadStatus.DISCARDED;
+            case NO_ANSWER, VOICEMAIL, OTHER           -> LeadStatus.CONTACTED;
         };
         leadUseCases.updateLeadStatus(leadId, newStatus, callbackDate);
         logger.info("Lead {} actualizado a {} por resultado {}", leadId, newStatus, result);

@@ -38,12 +38,30 @@ public class LeadRepositoryImpl implements LeadRepositoryPort {
     @Override public List<Lead> findAssignedPendingLeads(Long agentId) {
         return repo.findAssignedPendingLeads(agentId).stream().map(LeadMapper::entityToDomain).toList();
     }
+
     @Override
-    public List<Lead> findPendingCallbacks(LocalDate today, Long userId, Long agentId) {
-        return repo.findPendingCallbacks(today, userId, agentId)
+    public List<Lead> findPendingCallbacks(Long userId, Long agentId) {
+        return repo.findPendingCallbacks(userId, agentId)
                 .stream().map(LeadMapper::entityToDomain).toList();
     }
+
     @Override public List<Object[]> countByStatusForOwner(Long ownerId) {
         return repo.countByStatusForOwner(ownerId);
+    }
+
+    @Override
+    public Optional<Lead> findActiveByPhone(String phone) {
+        return repo.findActiveByContactPhone(phone)
+                .stream()
+                .findFirst()
+                .map(LeadMapper::entityToDomain);
+    }
+
+    @Override
+    public void updateStatus(Long leadId, LeadStatus status) {
+        repo.findById(leadId).ifPresent(lead -> {
+            lead.setStatus(status);
+            repo.save(lead);
+        });
     }
 }

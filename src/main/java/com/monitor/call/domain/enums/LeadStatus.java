@@ -8,5 +8,6 @@ public enum LeadStatus {
     INTERESTED,
     CONVERTED,
     CALLBACK,
-    DISCARDED
+    DISCARDED,
+    APPOINTMENT
 }

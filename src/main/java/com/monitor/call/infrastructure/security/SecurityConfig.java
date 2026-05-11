@@ -71,6 +71,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/calls/*/typification").hasAnyRole("ADMIN", "CALL_AGENT")
                 .requestMatchers("/api/leads/assigned").hasAnyRole("ADMIN", "CALL_AGENT")
                 .requestMatchers("/api/dashboard/status/**").hasAnyRole("ADMIN", "CALL_AGENT")
+                    // Citas — todos los roles autenticados
+                    .requestMatchers("/api/appointments/**").hasAnyRole("ADMIN", "CALL_AGENT", "SALES_AGENT")
                 // Todos los roles autenticados
                 .requestMatchers(HttpMethod.GET, "/api/leads/**").hasAnyRole("ADMIN", "SALES_AGENT", "CALL_AGENT")
                 .requestMatchers("/api/auth/change-password").authenticated()

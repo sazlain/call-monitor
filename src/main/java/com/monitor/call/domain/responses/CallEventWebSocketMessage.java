@@ -25,6 +25,12 @@ public class CallEventWebSocketMessage {
     private CallFlow callFlow;
     private String callAPIID;
     private OffsetDateTime timestamp;
+    private Long leadId;
+    private String leadContactName;
+    private String leadContactPhone;
+    private String leadNotes;
+    private String leadStatus;
+    private Boolean leadFound;
 
     /**
      * Accion sugerida para el frontend segun el estado:

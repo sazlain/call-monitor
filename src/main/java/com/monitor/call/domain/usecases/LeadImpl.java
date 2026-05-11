@@ -127,13 +127,10 @@ public class LeadImpl implements LeadUseCases {
 
     @Override
     public List<LeadResponse> listPendingCallbacks(Long userId) {
-        // Para callbacks: buscar por ownerId (userId directo para SALES_AGENT)
-        // y por assignedAgentId (agentId para CALL_AGENT)
         Long agentId = agentRepo.findByUserId(userId)
                 .map(a -> a.getId())
                 .orElse(null);
-        // Pasar ambos: ownerId=userId y agentId para cubrir ambos roles
-        return leadRepo.findPendingCallbacks(LocalDate.now(), userId, agentId)
+        return leadRepo.findPendingCallbacks(userId, agentId)
                 .stream().map(this::toResponse).toList();
     }
 

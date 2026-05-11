@@ -21,14 +21,13 @@ public interface LeadJpaRepository extends JpaRepository<LeadEntity, Long>,
     List<LeadEntity> findByAssignedAgentIdAndStatus(Long agentId, LeadStatus status);
 
     @Query("SELECT l FROM LeadEntity l WHERE l.status = 'CALLBACK' " +
-            "AND l.callbackDate <= :today " +
             "AND (l.ownerId = :userId OR l.assignedAgentId = :agentId) " +
-            "ORDER BY l.callbackDate ASC")
+            "ORDER BY l.callbackDate ASC NULLS LAST")
     List<LeadEntity> findPendingCallbacks(
-            @Param("today") LocalDate today,
             @Param("userId") Long userId,
             @Param("agentId") Long agentId
     );
+
     @Query("SELECT l FROM LeadEntity l WHERE l.ownerId = :ownerId AND l.leadDate BETWEEN :from AND :to ORDER BY l.createdAt DESC")
     List<LeadEntity> findByOwnerAndDateRange(@Param("ownerId") Long ownerId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
@@ -40,4 +39,7 @@ public interface LeadJpaRepository extends JpaRepository<LeadEntity, Long>,
 
     @Query("SELECT COUNT(l) > 0 FROM LeadEntity l WHERE l.contactPhone = :phone AND l.ownerId = :ownerId")
     boolean existsByPhoneAndOwner(@Param("phone") String phone, @Param("ownerId") Long ownerId);
+
+    @Query("SELECT l FROM LeadEntity l WHERE l.contactPhone = :phone AND l.status NOT IN ('DISCARDED', 'CONVERTED') ORDER BY l.createdAt DESC")
+    List<LeadEntity> findActiveByContactPhone(@Param("phone") String phone);
 }

@@ -8,5 +8,8 @@ public enum CallResult {
     WRONG_NUMBER,
     NO_ANSWER,
     VOICEMAIL,
-    OTHER
+    OTHER,
+    APPOINTMENT,
+    APPOINTMENT_RESCHEDULE,
+    APPOINTMENT_CANCEL
 }
