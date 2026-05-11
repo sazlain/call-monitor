@@ -17,16 +17,16 @@ import java.util.Optional;
 
 /**
  * Emite eventos de llamada por WebSocket a los canales correspondientes.
- *
+ * <p>
  * Canales:
- *   /topic/calls/agent/{extension}   -> el agente ve sus propios eventos en tiempo real
- *   /topic/calls/group/{groupId}     -> el admin ve todos los eventos de su grupo
- *
+ * /topic/calls/agent/{extension}   -> el agente ve sus propios eventos en tiempo real
+ * /topic/calls/group/{groupId}     -> el admin ve todos los eventos de su grupo
+ * <p>
  * Acciones que el frontend debe ejecutar segun callStatus:
- *   CALLING  -> abrir formulario de captura de datos del contacto
- *   ANSWER   -> iniciar cronometro de duracion de llamada
- *   HANGUP   -> abrir formulario de tipificacion
- *   BUSY / NOANSWER / CANCEL / CONGESTION / CHANUNAVAIL -> cerrar formulario, registrar intento fallido
+ * CALLING  -> abrir formulario de captura de datos del contacto
+ * ANSWER   -> iniciar cronometro de duracion de llamada
+ * HANGUP   -> abrir formulario de tipificacion
+ * BUSY / NOANSWER / CANCEL / CONGESTION / CHANUNAVAIL -> cerrar formulario, registrar intento fallido
  */
 @Component
 public class CallEventWebSocketHandler {
@@ -85,12 +85,20 @@ public class CallEventWebSocketHandler {
 
     private CallEventWebSocketMessage buildMessage(CallEvent callEvent) {
 
-        String phone = callEvent.getCallerIdNum() != null && !callEvent.getCallerIdNum().isBlank()
-                ? callEvent.getCallerIdNum()
-                : callEvent.getCalledNumber();
+        // Determinar el número del contacto según el flujo de la llamada
+        String phone;
+        if ("out".equalsIgnoreCase(String.valueOf(callEvent.getCallFlow()))) {
+            // Saliente → el contacto es el número destino (calledNumber)
+            phone = callEvent.getCalledNumber();
+        } else {
+            // Entrante → el contacto es quien llama (callerIdNum)
+            phone = callEvent.getCallerIdNum();
+        }
 
+// Normalizar — quitar prefijo Colombia
         String normalizedPhone = phone != null
-                ? phone.replaceAll("^(\\+?57)", "") : null;
+                ? phone.replaceAll("^(\\+?57)", "")
+                : null;
 
         Lead lead = null;
         if (normalizedPhone != null && !normalizedPhone.isBlank()) {
@@ -124,9 +132,9 @@ public class CallEventWebSocketHandler {
      */
     private String resolveFrontendAction(CallStatus status, Lead lead) {
         return switch (status) {
-            case CALLING  -> "OPEN_CONTACT_FORM";
-            case ANSWER   -> "START_CALL_TIMER";
-            case HANGUP   -> lead != null ? "OPEN_TYPIFICATION_FORM" : "ASK_CREATE_LEAD";
+            case CALLING -> "OPEN_CONTACT_FORM";
+            case ANSWER -> "START_CALL_TIMER";
+            case HANGUP -> lead != null ? "OPEN_TYPIFICATION_FORM" : "ASK_CREATE_LEAD";
             case BUSY, NOANSWER, CANCEL, CONGESTION, CHANUNAVAIL -> "REGISTER_FAILED_ATTEMPT";
         };
     }
