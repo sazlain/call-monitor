@@ -51,20 +51,34 @@ public class CallEventWebSocketHandler {
      */
     public void emit(CallEvent callEvent) {
         CallEventWebSocketMessage message = buildMessage(callEvent);
-        String extension = callEvent.getCallerExtension();
+        String rawExtension = callEvent.getCallerExtension();
 
-        // 1. Emitir al canal del agente especifico
+        // Buscar agente por extensión completa primero
+        // Si no encuentra, buscar por los últimos N dígitos
+        String extension = rawExtension;
+        if (agentJpaRepository.findByExtension(rawExtension).isEmpty()) {
+            // Intentar sufijos de 4, 5, 6 dígitos hasta encontrar el agente
+            for (int len = 4; len <= rawExtension.length(); len++) {
+                String suffix = rawExtension.substring(rawExtension.length() - len);
+                if (agentJpaRepository.findByExtension(suffix).isPresent()) {
+                    extension = suffix;
+                    logger.info("Extensión normalizada: {} -> {}", rawExtension, extension);
+                    break;
+                }
+            }
+        }
+
+        // Emitir al canal del agente
         String agentChannel = "/topic/calls/agent/" + extension;
         messagingTemplate.convertAndSend(agentChannel, message);
-        logger.debug("WS emitido a {}: callId={} status={}", agentChannel,
+        logger.info("WS emitido a {}: callId={} status={}", agentChannel,
                 callEvent.getCallId(), callEvent.getCallStatus());
 
-        // 2. Emitir al canal del grupo del agente (para el admin)
+        // Emitir al grupo
         agentJpaRepository.findByExtension(extension).ifPresent(agent -> {
             if (agent.getGroup() != null) {
                 String groupChannel = "/topic/calls/group/" + agent.getGroup().getId();
                 messagingTemplate.convertAndSend(groupChannel, message);
-                logger.debug("WS emitido a {}: callId={}", groupChannel, callEvent.getCallId());
             }
         });
     }
