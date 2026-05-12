@@ -1,6 +1,5 @@
 package com.monitor.call.infrastructure.requests;
 
-import com.google.gson.Gson;
 import com.monitor.call.domain.enums.CallFlow;
 import com.monitor.call.domain.enums.CallStatus;
 import lombok.AllArgsConstructor;
@@ -25,8 +24,4 @@ public class CallEventRequest {
     private String calledNumber;
     private String callAPIID;
 
-    @Override
-    public String toString() {
-        return new Gson().toJson(this);
-    }
 }
