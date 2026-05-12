@@ -25,4 +25,6 @@ public interface CallTypificationJpaRepository extends JpaRepository<CallTypific
 
     @Query(value = "SELECT e.call_id FROM call_events e WHERE e.call_status = 'HANGUP' AND e.caller_extension IN (SELECT a.extension FROM agents a WHERE a.group_id IN (SELECT ag.id FROM agent_groups ag WHERE ag.admin_id = :adminId)) AND e.call_id NOT IN (SELECT t.call_id FROM call_typifications t) AND e.created_at BETWEEN :from AND :to ORDER BY e.created_at DESC", nativeQuery = true)
     List<String> findUntypifiedCallIds(@Param("adminId") Long adminId, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
+
+    List<CallTypificationEntity> findByCallIdIn(List<String> callIds);
 }

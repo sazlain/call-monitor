@@ -64,6 +64,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/reports/**").hasRole("ADMIN")
                 // ADMIN + SALES_AGENT
                 .requestMatchers(HttpMethod.POST, "/api/leads/**").hasAnyRole("ADMIN", "SALES_AGENT",  "CALL_AGENT")
+                .requestMatchers(HttpMethod.POST, "/api/leads/**").hasAnyRole("ADMIN", "SALES_AGENT",  "CALL_AGENT")
                 .requestMatchers(HttpMethod.PUT, "/api/leads/**").hasAnyRole("ADMIN", "SALES_AGENT")
                 .requestMatchers("/api/dashboard/sales/**").hasAnyRole("ADMIN", "SALES_AGENT")
                 // ADMIN + CALL_AGENT
