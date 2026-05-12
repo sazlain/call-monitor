@@ -18,7 +18,7 @@ public class AppointmentRequest {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate appointmentDate;
 
-    @JsonFormat(pattern = "HH:mm:ss")
+    @JsonFormat(pattern = "HH:mm")
     private LocalTime appointmentTime;
 
     private String address;
