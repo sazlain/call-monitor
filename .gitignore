@@ -34,5 +34,5 @@ build/
 
 .env
 .env.docker
-.claude}
+.claude
 .idea
