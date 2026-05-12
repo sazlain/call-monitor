@@ -1,6 +1,5 @@
 package com.monitor.call.infrastructure.adapters.out.persistence.repositories;
 
-import com.monitor.call.domain.enums.CallStatus;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.CallEventEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -103,58 +102,38 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
     @Query(value = "SELECT DISTINCT caller_extension FROM call_events WHERE caller_extension IN :extensions AND caller_extension NOT IN (SELECT DISTINCT caller_extension FROM call_events WHERE created_at > :since)", nativeQuery = true)
     List<String> findInactiveExtensions(@Param("extensions") List<String> extensions, @Param("since") OffsetDateTime since);
 
-    // ── Historial del agente (filtrado por lista de extensiones) ─────────────
+    // ── Historial paginado con joins ──────────────────────────────────────────
 
     @Query(value = """
-        SELECT * FROM call_events c
-        WHERE c.caller_extension IN :extensions
-          AND (CAST(:from AS timestamptz) IS NULL OR c.created_at >= CAST(:from AS timestamptz))
-          AND (CAST(:to AS timestamptz)   IS NULL OR c.created_at <= CAST(:to AS timestamptz))
-          AND (CAST(:status AS text)      IS NULL OR c.call_status  = CAST(:status AS text))
-        ORDER BY c.created_at DESC
+        SELECT e.id, e.call_id, e.caller_extension, e.caller_id_num, e.caller_id_name,
+               e.called_number, e.call_status, e.call_flow, e.created_at,
+               a.id AS agent_id, u.name AS agent_name, a.extension AS agent_extension,
+               t.result AS typification_result, t.notes AS typification_notes,
+               CAST(t.callback_date AS varchar) AS callback_date,
+               t.lead_id, l.contact_name AS lead_contact_name, l.contact_phone AS lead_contact_phone
+        FROM call_events e
+        LEFT JOIN agents a ON a.extension = e.caller_extension AND a.active = true
+        LEFT JOIN users u ON u.id = a.user_id
+        LEFT JOIN call_typifications t ON t.call_id = e.call_id
+        LEFT JOIN leads l ON l.id = t.lead_id
+        WHERE (CAST(:status AS text)        IS NULL OR e.call_status      = CAST(:status AS text))
+          AND (CAST(:extension AS text)     IS NULL OR e.caller_extension = CAST(:extension AS text))
+          AND (CAST(:from AS timestamptz)   IS NULL OR e.created_at       >= CAST(:from AS timestamptz))
+          AND (CAST(:to AS timestamptz)     IS NULL OR e.created_at       <= CAST(:to AS timestamptz))
+        ORDER BY e.created_at DESC
         """,
         countQuery = """
-        SELECT COUNT(*) FROM call_events c
-        WHERE c.caller_extension IN :extensions
-          AND (CAST(:from AS timestamptz) IS NULL OR c.created_at >= CAST(:from AS timestamptz))
-          AND (CAST(:to AS timestamptz)   IS NULL OR c.created_at <= CAST(:to AS timestamptz))
-          AND (CAST(:status AS text)      IS NULL OR c.call_status  = CAST(:status AS text))
+        SELECT COUNT(*) FROM call_events e
+        WHERE (CAST(:status AS text)        IS NULL OR e.call_status      = CAST(:status AS text))
+          AND (CAST(:extension AS text)     IS NULL OR e.caller_extension = CAST(:extension AS text))
+          AND (CAST(:from AS timestamptz)   IS NULL OR e.created_at       >= CAST(:from AS timestamptz))
+          AND (CAST(:to AS timestamptz)     IS NULL OR e.created_at       <= CAST(:to AS timestamptz))
         """,
         nativeQuery = true)
-    Page<CallEventEntity> findHistory(
-            @Param("extensions") List<String> extensions,
-            @Param("from")       OffsetDateTime from,
-            @Param("to")         OffsetDateTime to,
-            @Param("status")     String status,
-            Pageable pageable
-    );
-
-    // ── Historial admin (todas las extensiones, filtro opcional por extensión) ─
-
-    @Query(value = """
-        SELECT * FROM call_events c
-        WHERE (CAST(:from AS timestamptz)      IS NULL OR c.created_at >= CAST(:from AS timestamptz))
-          AND (CAST(:to AS timestamptz)        IS NULL OR c.created_at <= CAST(:to AS timestamptz))
-          AND (CAST(:status AS text)           IS NULL OR c.call_status = CAST(:status AS text))
-          AND (CAST(:extension AS text)        IS NULL OR LOWER(c.caller_extension)
-                                               LIKE LOWER('%' || CAST(:extension AS text) || '%'))
-        ORDER BY c.created_at DESC
-        """,
-        countQuery = """
-        SELECT COUNT(*) FROM call_events c
-        WHERE (CAST(:from AS timestamptz)      IS NULL OR c.created_at >= CAST(:from AS timestamptz))
-          AND (CAST(:to AS timestamptz)        IS NULL OR c.created_at <= CAST(:to AS timestamptz))
-          AND (CAST(:status AS text)           IS NULL OR c.call_status = CAST(:status AS text))
-          AND (CAST(:extension AS text)        IS NULL OR LOWER(c.caller_extension)
-                                               LIKE LOWER('%' || CAST(:extension AS text) || '%'))
-        """,
-        nativeQuery = true)
-    Page<CallEventEntity> findAllHistory(
+    Page<Object[]> findHistory(
+            @Param("extension") String extension,
+            @Param("status")    String status,
             @Param("from")      OffsetDateTime from,
             @Param("to")        OffsetDateTime to,
-            @Param("status")    String status,
-            @Param("extension") String extension,
-            Pageable pageable
-    );
-
+            Pageable pageable);
 }

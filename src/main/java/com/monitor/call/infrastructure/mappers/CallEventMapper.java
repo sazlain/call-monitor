@@ -50,6 +50,7 @@ public class CallEventMapper {
 
     public static CallEvent entityToDomain(CallEventEntity callEventEntity) {
         return CallEvent.builder()
+                .id(callEventEntity.getId())
                 .callId(callEventEntity.getCallId())
                 .callerIdNum(callEventEntity.getCallerIdNum())
                 .callerIdName(callEventEntity.getCallerIdName())
@@ -60,6 +61,7 @@ public class CallEventMapper {
                 .callerExtension(callEventEntity.getCallerExtension())
                 .calledNumber(callEventEntity.getCalledNumber())
                 .callAPIID(callEventEntity.getCallAPIID())
+                .createdAt(callEventEntity.getCreatedAt())
                 .build();
     }
 

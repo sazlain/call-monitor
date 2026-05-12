@@ -8,6 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.OffsetDateTime;
 
 @Data
 @NoArgsConstructor
@@ -15,6 +16,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class CallEvent {
 
+    private Long id;
     private String callId;
     private String callerIdNum;
     private String callerIdName;
@@ -25,6 +27,7 @@ public class CallEvent {
     private String callerExtension;
     private String calledNumber;
     private String callAPIID;
+    private OffsetDateTime createdAt;
 
     @Override
     public String toString() {

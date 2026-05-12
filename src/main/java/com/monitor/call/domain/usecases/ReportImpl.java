@@ -1,10 +1,10 @@
 package com.monitor.call.domain.usecases;
 
+import com.monitor.call.domain.models.CallEvent;
+import com.monitor.call.domain.models.CallTypification;
+import com.monitor.call.domain.models.Lead;
 import com.monitor.call.domain.ports.in.ReportUseCases;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.CallEventEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.CallTypificationEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.LeadEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.*;
+import com.monitor.call.domain.ports.out.*;
 import com.opencsv.CSVWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,25 +27,25 @@ public class ReportImpl implements ReportUseCases {
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter D_FMT  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    private final CallEventJpaRepository callEventRepo;
-    private final CallTypificationJpaRepository typRepo;
-    private final AgentJpaRepository agentRepo;
-    private final AgentGroupJpaRepository groupRepo;
-    private final UserJpaRepository userRepo;
-    private final LeadJpaRepository leadRepo;
+    private final DashboardRepositoryPort callEventPort;
+    private final CallTypificationRepositoryPort typPort;
+    private final AgentRepositoryPort agentPort;
+    private final AgentGroupRepositoryPort groupPort;
+    private final UserRepositoryPort userPort;
+    private final LeadRepositoryPort leadPort;
 
-    public ReportImpl(CallEventJpaRepository callEventRepo,
-                      CallTypificationJpaRepository typRepo,
-                      AgentJpaRepository agentRepo,
-                      AgentGroupJpaRepository groupRepo,
-                      UserJpaRepository userRepo,
-                      LeadJpaRepository leadRepo) {
-        this.callEventRepo = callEventRepo;
-        this.typRepo       = typRepo;
-        this.agentRepo     = agentRepo;
-        this.groupRepo     = groupRepo;
-        this.userRepo      = userRepo;
-        this.leadRepo      = leadRepo;
+    public ReportImpl(DashboardRepositoryPort callEventPort,
+                      CallTypificationRepositoryPort typPort,
+                      AgentRepositoryPort agentPort,
+                      AgentGroupRepositoryPort groupPort,
+                      UserRepositoryPort userPort,
+                      LeadRepositoryPort leadPort) {
+        this.callEventPort = callEventPort;
+        this.typPort       = typPort;
+        this.agentPort     = agentPort;
+        this.groupPort     = groupPort;
+        this.userPort      = userPort;
+        this.leadPort      = leadPort;
     }
 
     // ── Reporte de llamadas por agente ────────────────────────────────────────
@@ -54,17 +54,17 @@ public class ReportImpl implements ReportUseCases {
     public byte[] generateAgentCallReport(String extension, OffsetDateTime from, OffsetDateTime to) {
         logger.info("Reporte llamadas: extension={} from={} to={}", extension, from, to);
 
-        List<CallEventEntity> events = callEventRepo.findByCallerExtension(extension).stream()
+        List<CallEvent> events = callEventPort.findByCallerExtension(extension).stream()
                 .filter(e -> !e.getCreatedAt().isBefore(from) && !e.getCreatedAt().isAfter(to))
                 .toList();
 
-        Map<String, List<CallEventEntity>> byCall = events.stream()
-                .collect(Collectors.groupingBy(CallEventEntity::getCallId));
+        Map<String, List<CallEvent>> byCall = events.stream()
+                .collect(Collectors.groupingBy(CallEvent::getCallId));
 
-        Long agentId = agentRepo.findByExtension(extension).map(a -> a.getId()).orElse(-1L);
-        List<CallTypificationEntity> typifications = typRepo.findByAgentAndPeriod(agentId, from, to);
-        Map<String, CallTypificationEntity> typMap = typifications.stream()
-                .collect(Collectors.toMap(CallTypificationEntity::getCallId, t -> t, (a, b) -> b));
+        Long agentId = agentPort.findByExtension(extension).map(a -> a.getId()).orElse(-1L);
+        List<CallTypification> typifications = typPort.findByAgentAndPeriod(agentId, from, to);
+        Map<String, CallTypification> typMap = typifications.stream()
+                .collect(Collectors.toMap(CallTypification::getCallId, t -> t, (a, b) -> b));
 
         String[] header = {
             "Fecha", "Call ID", "Numero marcado", "Nombre contacto",
@@ -73,18 +73,18 @@ public class ReportImpl implements ReportUseCases {
         };
 
         return writeCsv(header, writer -> {
-            for (Map.Entry<String, List<CallEventEntity>> entry : byCall.entrySet()) {
+            for (Map.Entry<String, List<CallEvent>> entry : byCall.entrySet()) {
                 String callId = entry.getKey();
-                List<CallEventEntity> callEvents = entry.getValue().stream()
-                        .sorted(Comparator.comparing(CallEventEntity::getCreatedAt)).toList();
+                List<CallEvent> callEvents = entry.getValue().stream()
+                        .sorted(Comparator.comparing(CallEvent::getCreatedAt)).toList();
 
-                CallEventEntity first = callEvents.get(0);
-                CallEventEntity last  = callEvents.get(callEvents.size() - 1);
+                CallEvent first = callEvents.get(0);
+                CallEvent last  = callEvents.get(callEvents.size() - 1);
 
                 long durationSec = 0;
-                Optional<CallEventEntity> answerEvent = callEvents.stream()
+                Optional<CallEvent> answerEvent = callEvents.stream()
                         .filter(e -> "ANSWER".equals(e.getCallStatus().name())).findFirst();
-                Optional<CallEventEntity> hangupEvent = callEvents.stream()
+                Optional<CallEvent> hangupEvent = callEvents.stream()
                         .filter(e -> "HANGUP".equals(e.getCallStatus().name())).findFirst();
                 if (answerEvent.isPresent() && hangupEvent.isPresent()) {
                     durationSec = java.time.Duration.between(
@@ -92,7 +92,7 @@ public class ReportImpl implements ReportUseCases {
                             hangupEvent.get().getCreatedAt()).getSeconds();
                 }
 
-                CallTypificationEntity typ = typMap.get(callId);
+                CallTypification typ = typMap.get(callId);
                 boolean typified = typ != null;
 
                 writer.writeNext(new String[]{
@@ -120,8 +120,8 @@ public class ReportImpl implements ReportUseCases {
         logger.info("Reporte grupo: adminId={} groupId={}", adminId, groupId);
 
         var groups = groupId != null
-                ? groupRepo.findById(groupId).map(List::of).orElse(List.of())
-                : groupRepo.findByAdminIdAndActiveTrue(adminId);
+                ? groupPort.findById(groupId).map(List::of).orElse(List.of())
+                : groupPort.findByAdminId(adminId).stream().filter(g -> Boolean.TRUE.equals(g.getActive())).toList();
 
         String[] header = {
             "Agente", "Extension", "Grupo",
@@ -132,18 +132,18 @@ public class ReportImpl implements ReportUseCases {
 
         return writeCsv(header, writer -> {
             for (var group : groups) {
-                var agents = agentRepo.findByGroupIdAndActiveTrue(group.getId());
+                var agents = agentPort.findByGroupId(group.getId()).stream()
+                        .filter(a -> Boolean.TRUE.equals(a.getActive())).toList();
                 for (var agent : agents) {
-                    var user = userRepo.findById(agent.getUserId()).orElse(null);
-                    String name = user != null ? user.getName() : agent.getExtension();
+                    String name = userPort.findById(agent.getUserId()).map(u -> u.getName()).orElse(agent.getExtension());
                     String ext  = agent.getExtension();
 
-                    List<CallEventEntity> agentEvents = callEventRepo.findByCallerExtension(ext).stream()
+                    List<CallEvent> agentEvents = callEventPort.findByCallerExtension(ext).stream()
                             .filter(e -> !e.getCreatedAt().isBefore(from) && !e.getCreatedAt().isAfter(to))
                             .toList();
 
-                    Map<String, List<CallEventEntity>> byCall = agentEvents.stream()
-                            .collect(Collectors.groupingBy(CallEventEntity::getCallId));
+                    Map<String, List<CallEvent>> byCall = agentEvents.stream()
+                            .collect(Collectors.groupingBy(CallEvent::getCallId));
 
                     long total = byCall.values().stream()
                             .filter(evts -> evts.stream().anyMatch(e -> "CALLING".equals(e.getCallStatus().name())))
@@ -155,9 +155,9 @@ public class ReportImpl implements ReportUseCases {
                     double rate   = total > 0 ? round1(answered * 100.0 / total) : 0;
 
                     long totalDur = byCall.values().stream().mapToLong(evts -> {
-                        Optional<CallEventEntity> ans = evts.stream()
+                        Optional<CallEvent> ans = evts.stream()
                                 .filter(e -> "ANSWER".equals(e.getCallStatus().name())).findFirst();
-                        Optional<CallEventEntity> hng = evts.stream()
+                        Optional<CallEvent> hng = evts.stream()
                                 .filter(e -> "HANGUP".equals(e.getCallStatus().name())).findFirst();
                         return (ans.isPresent() && hng.isPresent())
                                 ? java.time.Duration.between(ans.get().getCreatedAt(), hng.get().getCreatedAt()).getSeconds()
@@ -165,7 +165,7 @@ public class ReportImpl implements ReportUseCases {
                     }).sum();
                     double avgDur = answered > 0 ? round1(totalDur * 1.0 / answered) : 0;
 
-                    List<CallTypificationEntity> typs = typRepo.findByAgentAndPeriod(agent.getId(), from, to);
+                    List<CallTypification> typs = typPort.findByAgentAndPeriod(agent.getId(), from, to);
                     long sales    = typs.stream().filter(t -> "SALE".equals(t.getResult().name())).count();
                     double convRate = answered > 0 ? round1(sales * 100.0 / answered) : 0;
 
@@ -189,23 +189,21 @@ public class ReportImpl implements ReportUseCases {
         LocalDate fromDate = from.toLocalDate();
         LocalDate toDate   = to.toLocalDate();
 
-        List<LeadEntity> leads = leadRepo.findByOwnerId(ownerId).stream()
+        List<Lead> leads = leadPort.findByOwnerId(ownerId).stream()
                 .filter(l -> !l.getLeadDate().isBefore(fromDate) && !l.getLeadDate().isAfter(toDate))
-                .sorted(Comparator.comparing(LeadEntity::getLeadDate).reversed())
+                .sorted(Comparator.comparing(Lead::getLeadDate).reversed())
                 .toList();
 
-        // Precargar nombres de agentes asignados
         Map<Long, String> agentNames = new HashMap<>();
         leads.stream().filter(l -> l.getAssignedAgentId() != null)
-                .map(LeadEntity::getAssignedAgentId).distinct().forEach(agId ->
-                    agentNames.put(agId, agentRepo.findById(agId)
-                            .flatMap(a -> userRepo.findById(a.getUserId()))
+                .map(Lead::getAssignedAgentId).distinct().forEach(agId ->
+                    agentNames.put(agId, agentPort.findById(agId)
+                            .flatMap(a -> userPort.findById(a.getUserId()))
                             .map(u -> u.getName()).orElse("Desconocido")));
 
-        // Precargar tipificaciones por leadId
-        Map<Long, List<CallTypificationEntity>> typByLead = new HashMap<>();
+        Map<Long, List<CallTypification>> typByLead = new HashMap<>();
         leads.forEach(l -> {
-            List<CallTypificationEntity> typs = typRepo.findByLeadId(l.getId());
+            List<CallTypification> typs = typPort.findByLeadId(l.getId());
             if (!typs.isEmpty()) typByLead.put(l.getId(), typs);
         });
 
@@ -216,13 +214,13 @@ public class ReportImpl implements ReportUseCases {
         };
 
         return writeCsv(header, writer -> {
-            for (LeadEntity lead : leads) {
+            for (Lead lead : leads) {
                 String assignedName = lead.getAssignedAgentId() != null
                         ? agentNames.getOrDefault(lead.getAssignedAgentId(), "Sin asignar")
                         : "Sin asignar";
 
-                List<CallTypificationEntity> typs = typByLead.getOrDefault(lead.getId(), List.of());
-                CallTypificationEntity lastTyp = typs.isEmpty() ? null : typs.get(typs.size() - 1);
+                List<CallTypification> typs = typByLead.getOrDefault(lead.getId(), List.of());
+                CallTypification lastTyp = typs.isEmpty() ? null : typs.get(typs.size() - 1);
 
                 writer.writeNext(new String[]{
                     lead.getLeadDate().format(D_FMT),
@@ -248,8 +246,8 @@ public class ReportImpl implements ReportUseCases {
         logger.info("Reporte callbacks: userId={}", userId);
 
         LocalDate today = LocalDate.now();
-        Long agentId = agentRepo.findByUserId(userId).map(a -> a.getId()).orElse(-1L);
-        List<LeadEntity> callbacks = leadRepo.findPendingCallbacks( userId, agentId);
+        Long agentId = agentPort.findByUserId(userId).map(a -> a.getId()).orElse(-1L);
+        List<Lead> callbacks = leadPort.findPendingCallbacks(userId, agentId);
 
         String[] header = {
             "Contacto", "Telefono", "Origen", "Agente asignado",
@@ -257,10 +255,10 @@ public class ReportImpl implements ReportUseCases {
         };
 
         return writeCsv(header, writer -> {
-            for (LeadEntity lead : callbacks) {
+            for (Lead lead : callbacks) {
                 String assignedName = lead.getAssignedAgentId() != null
-                        ? agentRepo.findById(lead.getAssignedAgentId())
-                            .flatMap(a -> userRepo.findById(a.getUserId()))
+                        ? agentPort.findById(lead.getAssignedAgentId())
+                            .flatMap(a -> userPort.findById(a.getUserId()))
                             .map(u -> u.getName()).orElse("Sin asignar")
                         : "Sin asignar";
 
@@ -294,7 +292,6 @@ public class ReportImpl implements ReportUseCases {
     private byte[] writeCsv(String[] header, CsvRowWriter rowWriter) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            // BOM UTF-8 para que Excel abra correctamente con tildes y caracteres especiales
             out.write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
             try (CSVWriter writer = new CSVWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
                 writer.writeNext(header);
@@ -306,11 +303,7 @@ public class ReportImpl implements ReportUseCases {
         }
     }
 
-    private String safe(String value) {
-        return value != null ? value : "";
-    }
+    private String safe(String value) { return value != null ? value : ""; }
 
-    private double round1(double value) {
-        return Math.round(value * 10.0) / 10.0;
-    }
+    private double round1(double value) { return Math.round(value * 10.0) / 10.0; }
 }

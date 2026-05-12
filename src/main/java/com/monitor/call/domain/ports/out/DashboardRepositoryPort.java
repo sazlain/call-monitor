@@ -1,6 +1,6 @@
 package com.monitor.call.domain.ports.out;
 
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.CallEventEntity;
+import com.monitor.call.domain.models.CallEvent;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -20,8 +20,9 @@ public interface DashboardRepositoryPort {
     List<Object[]> countByDay(String ext, OffsetDateTime from, OffsetDateTime to);
     List<Object[]> countByDayOfWeek(String ext, OffsetDateTime from, OffsetDateTime to);
     List<String> findActiveExtensions(List<String> extensions);
-    Optional<CallEventEntity> findLastEventByExtension(String ext);
-    List<CallEventEntity> findRecentEvents(List<String> extensions, int limit);
+    Optional<CallEvent> findLastEventByExtension(String ext);
+    List<CallEvent> findRecentEvents(List<String> extensions, int limit);
+    List<CallEvent> findByCallerExtension(String ext);
     List<Object[]> getCallSummaryByExtensions(List<String> extensions, OffsetDateTime from, OffsetDateTime to);
     List<Object[]> countByDayAndExtension(List<String> extensions, OffsetDateTime from, OffsetDateTime to);
     Double sumDurationByExtensions(List<String> extensions, OffsetDateTime from, OffsetDateTime to);

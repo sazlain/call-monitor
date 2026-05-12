@@ -1,8 +1,9 @@
 package com.monitor.call.infrastructure.adapters.out.persistence.impl;
 
+import com.monitor.call.domain.models.CallEvent;
 import com.monitor.call.domain.ports.out.DashboardRepositoryPort;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.CallEventEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.CallEventJpaRepository;
+import com.monitor.call.infrastructure.mappers.CallEventMapper;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
@@ -31,8 +32,24 @@ public class DashboardRepositoryImpl implements DashboardRepositoryPort {
     @Override public List<Object[]> countByDay(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.countByDay(ext, from, to); }
     @Override public List<Object[]> countByDayOfWeek(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.countByDayOfWeek(ext, from, to); }
     @Override public List<String> findActiveExtensions(List<String> extensions) { return repo.findActiveExtensions(extensions); }
-    @Override public Optional<CallEventEntity> findLastEventByExtension(String ext) { return repo.findLastEventByExtension(ext); }
-    @Override public List<CallEventEntity> findRecentEvents(List<String> extensions, int limit) { return repo.findRecentEvents(extensions, PageRequest.of(0, limit)); }
+
+    @Override
+    public Optional<CallEvent> findLastEventByExtension(String ext) {
+        return repo.findLastEventByExtension(ext).map(CallEventMapper::entityToDomain);
+    }
+
+    @Override
+    public List<CallEvent> findRecentEvents(List<String> extensions, int limit) {
+        return repo.findRecentEvents(extensions, PageRequest.of(0, limit))
+                .stream().map(CallEventMapper::entityToDomain).toList();
+    }
+
+    @Override
+    public List<CallEvent> findByCallerExtension(String ext) {
+        return repo.findByCallerExtension(ext)
+                .stream().map(CallEventMapper::entityToDomain).toList();
+    }
+
     @Override public List<Object[]> getCallSummaryByExtensions(List<String> extensions, OffsetDateTime from, OffsetDateTime to) { return repo.getCallSummaryByExtensions(extensions, from, to); }
     @Override public List<Object[]> countByDayAndExtension(List<String> extensions, OffsetDateTime from, OffsetDateTime to) { return repo.countByDayAndExtension(extensions, from, to); }
     @Override public Double sumDurationByExtensions(List<String> extensions, OffsetDateTime from, OffsetDateTime to) { return repo.sumDurationByExtensions(extensions, from, to); }
