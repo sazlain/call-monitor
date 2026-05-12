@@ -1,7 +1,7 @@
 package com.monitor.call.infrastructure.requests;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.monitor.call.infrastructure.config.LocalTimeDeserializer;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -15,10 +15,9 @@ public class AppointmentRequest {
     private String callId;
     private Long leadId;
 
-    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate appointmentDate;
 
-    @JsonFormat(pattern = "HH:mm")
+    @JsonDeserialize(using = LocalTimeDeserializer.class)
     private LocalTime appointmentTime;
 
     private String address;
