@@ -9,5 +9,6 @@ public enum LeadStatus {
     CONVERTED,
     CALLBACK,
     DISCARDED,
-    APPOINTMENT
+    APPOINTMENT,
+    APPOINTMENT_RESCHEDULED
 }

@@ -4,6 +4,8 @@ import com.monitor.call.domain.enums.LeadStatus;
 import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.models.Lead;
 import com.monitor.call.domain.ports.in.LeadUseCases;
+import com.monitor.call.domain.ports.in.SystemConfigUseCases;
+import com.monitor.call.domain.ports.out.AgentRepositoryPort;
 import com.monitor.call.domain.ports.out.LeadRepositoryPort;
 import com.monitor.call.domain.responses.BulkLeadResponse;
 import com.monitor.call.domain.responses.LeadResponse;
@@ -20,6 +22,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,16 +34,33 @@ public class LeadImpl implements LeadUseCases {
     private final LeadRepositoryPort leadRepo;
     private final UserJpaRepository userRepo;
     private final AgentJpaRepository agentRepo;
+    private final AgentRepositoryPort agentRepositoryPort;
+    private final SystemConfigUseCases configUseCases;
 
-    public LeadImpl(LeadRepositoryPort leadRepo, UserJpaRepository userRepo, AgentJpaRepository agentRepo) {
+    /** Round-robin index por admin (en memoria; se reinicia al reiniciar el servicio) */
+    private final Map<Long, AtomicInteger> roundRobinIndex = new ConcurrentHashMap<>();
+
+    public LeadImpl(LeadRepositoryPort leadRepo,
+                    UserJpaRepository userRepo,
+                    AgentJpaRepository agentRepo,
+                    AgentRepositoryPort agentRepositoryPort,
+                    SystemConfigUseCases configUseCases) {
         this.leadRepo = leadRepo;
         this.userRepo = userRepo;
         this.agentRepo = agentRepo;
+        this.agentRepositoryPort = agentRepositoryPort;
+        this.configUseCases = configUseCases;
     }
 
     @Override
     @Transactional
     public LeadResponse createLead(CreateLeadRequest request, Long ownerId) {
+        Long assignedAgentId = request.getAssignedAgentId();
+        if (assignedAgentId == null) {
+            assignedAgentId = resolveRoundRobinAgent(ownerId);
+        }
+        LeadStatus status = request.getStatus() != null ? request.getStatus() : LeadStatus.PENDING;
+
         Lead lead = Lead.builder()
                 .contactName(request.getContactName())
                 .contactPhone(request.getContactPhone())
@@ -47,12 +68,12 @@ public class LeadImpl implements LeadUseCases {
                 .notes(request.getNotes())
                 .leadDate(request.getLeadDate() != null ? request.getLeadDate() : LocalDate.now())
                 .ownerId(ownerId)
-                .assignedAgentId(request.getAssignedAgentId())
-                .status(request.getAssignedAgentId() != null ? LeadStatus.PENDING : LeadStatus.NEW)
+                .assignedAgentId(assignedAgentId)
+                .status(status)
                 .build();
 
         Lead saved = leadRepo.save(lead);
-        logger.info("Lead creado: {} por owner {}", saved.getId(), ownerId);
+        logger.info("Lead creado: id={} status={} owner={} agente={}", saved.getId(), status, ownerId, assignedAgentId);
         return toResponse(saved);
     }
 
@@ -62,6 +83,19 @@ public class LeadImpl implements LeadUseCases {
         List<Lead> toSave = new ArrayList<>();
         List<String> errors = new ArrayList<>();
 
+        // Pre-cargar lista de agentes para round-robin si aplica
+        boolean isAutoRoundRobin = assignedAgentId == null &&
+                "AUTO_ROUND_ROBIN".equalsIgnoreCase(configUseCases.getValue(ownerId, "leads.assignment_mode"));
+        List<Long> agentIds = isAutoRoundRobin
+                ? agentRepositoryPort.findByAdminId(ownerId).stream()
+                        .filter(a -> Boolean.TRUE.equals(a.getActive()))
+                        .map(Agent::getId).toList()
+                : List.of();
+
+        AtomicInteger bulkIndex = isAutoRoundRobin && !agentIds.isEmpty()
+                ? new AtomicInteger(roundRobinIndex.computeIfAbsent(ownerId, k -> new AtomicInteger(0)).get())
+                : null;
+
         for (int i = 0; i < leads.size(); i++) {
             CreateLeadRequest req = leads.get(i);
             try {
@@ -70,6 +104,14 @@ public class LeadImpl implements LeadUseCases {
                 if (req.getContactPhone() == null || req.getContactPhone().isBlank())
                     throw new IllegalArgumentException("Telefono requerido");
 
+                Long rowAgent = req.getAssignedAgentId() != null ? req.getAssignedAgentId() : assignedAgentId;
+                if (rowAgent == null && bulkIndex != null && !agentIds.isEmpty()) {
+                    rowAgent = agentIds.get(bulkIndex.getAndIncrement() % agentIds.size());
+                }
+
+                LeadStatus rowStatus = req.getStatus() != null ? req.getStatus()
+                        : rowAgent != null ? LeadStatus.PENDING : LeadStatus.NEW;
+
                 Lead lead = Lead.builder()
                         .contactName(req.getContactName())
                         .contactPhone(req.getContactPhone())
@@ -77,13 +119,19 @@ public class LeadImpl implements LeadUseCases {
                         .notes(req.getNotes())
                         .leadDate(req.getLeadDate() != null ? req.getLeadDate() : LocalDate.now())
                         .ownerId(ownerId)
-                        .assignedAgentId(assignedAgentId)
-                        .status(assignedAgentId != null ? LeadStatus.PENDING : LeadStatus.NEW)
+                        .assignedAgentId(rowAgent)
+                        .status(rowStatus)
                         .build();
                 toSave.add(lead);
             } catch (Exception e) {
                 errors.add("Fila " + (i + 1) + ": " + e.getMessage());
             }
+        }
+
+        // Actualizar el índice global de round-robin
+        if (bulkIndex != null && !agentIds.isEmpty()) {
+            roundRobinIndex.computeIfAbsent(ownerId, k -> new AtomicInteger(0))
+                    .set(bulkIndex.get() % agentIds.size());
         }
 
         List<Lead> saved = toSave.isEmpty() ? List.of() : leadRepo.saveAll(toSave);
@@ -175,6 +223,27 @@ public class LeadImpl implements LeadUseCases {
         lead.setStatus(status);
         if (callbackDate != null) lead.setCallbackDate(callbackDate);
         return toResponse(leadRepo.save(lead));
+    }
+
+    // ── Round-robin helper ────────────────────────────────────────────────────
+
+    /**
+     * Si el modo de asignación es AUTO_ROUND_ROBIN, devuelve el siguiente agente activo.
+     * Devuelve null si el modo es MANUAL o no hay agentes disponibles.
+     */
+    private Long resolveRoundRobinAgent(Long adminId) {
+        String mode = configUseCases.getValue(adminId, "leads.assignment_mode");
+        if (!"AUTO_ROUND_ROBIN".equalsIgnoreCase(mode)) return null;
+
+        List<Long> agentIds = agentRepositoryPort.findByAdminId(adminId).stream()
+                .filter(a -> Boolean.TRUE.equals(a.getActive()))
+                .map(Agent::getId)
+                .toList();
+        if (agentIds.isEmpty()) return null;
+
+        AtomicInteger idx = roundRobinIndex.computeIfAbsent(adminId, k -> new AtomicInteger(0));
+        int current = idx.getAndIncrement() % agentIds.size();
+        return agentIds.get(current);
     }
 
     private LeadResponse toResponse(Lead lead) {

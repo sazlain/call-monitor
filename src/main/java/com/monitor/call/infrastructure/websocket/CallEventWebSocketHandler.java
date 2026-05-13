@@ -4,9 +4,13 @@ import com.monitor.call.domain.enums.CallStatus;
 import com.monitor.call.domain.enums.LeadStatus;
 import com.monitor.call.domain.models.CallEvent;
 import com.monitor.call.domain.models.Lead;
+import com.monitor.call.domain.ports.in.SystemConfigUseCases;
 import com.monitor.call.domain.ports.out.LeadRepositoryPort;
 import com.monitor.call.domain.responses.CallEventWebSocketMessage;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
+import com.monitor.call.infrastructure.services.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -36,13 +40,22 @@ public class CallEventWebSocketHandler {
     private final SimpMessagingTemplate messagingTemplate;
     private final AgentJpaRepository agentJpaRepository;
     private final LeadRepositoryPort leadRepo;
+    private final SystemConfigUseCases configUseCases;
+    private final EmailService emailService;
+    private final UserJpaRepository userRepo;
 
     public CallEventWebSocketHandler(SimpMessagingTemplate messagingTemplate,
                                      AgentJpaRepository agentJpaRepository,
-                                     LeadRepositoryPort leadRepo) {
+                                     LeadRepositoryPort leadRepo,
+                                     SystemConfigUseCases configUseCases,
+                                     EmailService emailService,
+                                     UserJpaRepository userRepo) {
         this.messagingTemplate = messagingTemplate;
         this.agentJpaRepository = agentJpaRepository;
         this.leadRepo = leadRepo;
+        this.configUseCases = configUseCases;
+        this.emailService = emailService;
+        this.userRepo = userRepo;
     }
 
     /**
@@ -50,60 +63,59 @@ public class CallEventWebSocketHandler {
      * Se llama desde CallEventListenerImpl despues de guardar el evento en BD.
      */
     public void emit(CallEvent callEvent) {
-        CallEventWebSocketMessage message = buildMessage(callEvent);
         String rawExtension = callEvent.getCallerExtension();
+        String extension = normalizeExtension(rawExtension);
 
-        // Buscar agente por extensión completa primero
-        // Si no encuentra, buscar por los últimos N dígitos
-        String extension = rawExtension;
-        if (agentJpaRepository.findByExtension(rawExtension).isEmpty()) {
-            // Intentar sufijos de 4, 5, 6 dígitos hasta encontrar el agente
-            for (int len = 4; len <= rawExtension.length(); len++) {
-                String suffix = rawExtension.substring(rawExtension.length() - len);
-                if (agentJpaRepository.findByExtension(suffix).isPresent()) {
-                    extension = suffix;
-                    logger.info("Extensión normalizada: {} -> {}", rawExtension, extension);
-                    break;
-                }
-            }
-        }
+        AgentEntity agent = agentJpaRepository.findByExtension(extension).orElse(null);
+        Long adminId = (agent != null && agent.getGroup() != null) ? agent.getGroup().getAdminId() : null;
 
-        // Emitir al canal del agente
+        CallEventWebSocketMessage message = buildMessage(callEvent, adminId);
+
         String agentChannel = "/topic/calls/agent/" + extension;
         messagingTemplate.convertAndSend(agentChannel, message);
         logger.info("WS emitido a {}: callId={} status={}", agentChannel,
                 callEvent.getCallId(), callEvent.getCallStatus());
 
-        // Emitir al grupo
-        agentJpaRepository.findByExtension(extension).ifPresent(agent -> {
-            if (agent.getGroup() != null) {
-                String groupChannel = "/topic/calls/group/" + agent.getGroup().getId();
-                messagingTemplate.convertAndSend(groupChannel, message);
-            }
-        });
+        if (agent != null && agent.getGroup() != null) {
+            String groupChannel = "/topic/calls/group/" + agent.getGroup().getId();
+            messagingTemplate.convertAndSend(groupChannel, message);
+        }
     }
 
-    private CallEventWebSocketMessage buildMessage(CallEvent callEvent) {
-
-        // Determinar el número del contacto según el flujo de la llamada
-        String phone;
-        if ("out".equalsIgnoreCase(String.valueOf(callEvent.getCallFlow()))) {
-            // Saliente → el contacto es el número destino (calledNumber)
-            phone = callEvent.getCalledNumber();
-        } else {
-            // Entrante → el contacto es quien llama (callerIdNum)
-            phone = callEvent.getCallerIdNum();
+    private String normalizeExtension(String rawExtension) {
+        if (rawExtension == null || rawExtension.isBlank()) return rawExtension;
+        if (agentJpaRepository.findByExtension(rawExtension).isPresent()) return rawExtension;
+        for (int len = 4; len <= rawExtension.length(); len++) {
+            String suffix = rawExtension.substring(rawExtension.length() - len);
+            if (agentJpaRepository.findByExtension(suffix).isPresent()) {
+                logger.info("Extensión normalizada: {} -> {}", rawExtension, suffix);
+                return suffix;
+            }
         }
+        return rawExtension;
+    }
 
-// Normalizar — quitar prefijo Colombia
-        String normalizedPhone = phone != null
-                ? phone.replaceAll("^(\\+?57)", "")
-                : null;
+    private CallEventWebSocketMessage buildMessage(CallEvent callEvent, Long adminId) {
+
+        String phone = "out".equalsIgnoreCase(String.valueOf(callEvent.getCallFlow()))
+                ? callEvent.getCalledNumber()
+                : callEvent.getCallerIdNum();
 
         Lead lead = null;
-        if (normalizedPhone != null && !normalizedPhone.isBlank()) {
-            lead = leadRepo.findActiveByPhone(normalizedPhone)
-                    .orElse(leadRepo.findActiveByPhone(phone).orElse(null));
+        if (phone != null && !phone.isBlank()) {
+            lead = leadRepo.findActiveByPhone(phone).orElse(null);
+            logger.info("Búsqueda de lead: phone='{}' flow={} status={} -> {}",
+                    phone, callEvent.getCallFlow(), callEvent.getCallStatus(),
+                    lead != null ? "ENCONTRADO id=" + lead.getId() + " phone=" + lead.getContactPhone() : "NO ENCONTRADO");
+        }
+
+        // Cuando el número es desconocido, leer config para decidir comportamiento
+        boolean createLeadEnabled = adminId == null
+                || configUseCases.getBooleanValue(adminId, "leads.unknown.create_lead");
+
+        // Alerta de número desconocido — cuando create_lead está desactivado
+        if (callEvent.getCallStatus() == CallStatus.CALLING && lead == null && !createLeadEnabled) {
+            sendUnknownCallAlert(callEvent, callEvent.getCallerExtension(), adminId);
         }
 
         return CallEventWebSocketMessage.builder()
@@ -117,7 +129,7 @@ public class CallEventWebSocketHandler {
                 .callFlow(callEvent.getCallFlow())
                 .callAPIID(callEvent.getCallAPIID())
                 .timestamp(OffsetDateTime.now())
-                .frontendAction(resolveFrontendAction(callEvent.getCallStatus(), lead))
+                .frontendAction(resolveFrontendAction(callEvent.getCallStatus(), lead, createLeadEnabled))
                 .leadId(lead != null ? lead.getId() : null)
                 .leadContactName(lead != null ? lead.getContactName() : null)
                 .leadContactPhone(lead != null ? lead.getContactPhone() : null)
@@ -128,14 +140,54 @@ public class CallEventWebSocketHandler {
 
     /**
      * Traduce el CallStatus a una accion clara para el frontend.
-     * El frontend no necesita saber logica de negocio — solo ejecuta la accion.
+     * CALLING + lead conocido  → OPEN_LEAD_INFO
+     * CALLING + desconocido + createLeadEnabled → OPEN_CONTACT_FORM
+     * CALLING + desconocido + !createLeadEnabled → SKIP_UNKNOWN (sin modal)
+     * HANGUP  + desconocido + createLeadEnabled → ASK_CREATE_LEAD
+     * HANGUP  + desconocido + !createLeadEnabled → REGISTER_FAILED_ATTEMPT
      */
-    private String resolveFrontendAction(CallStatus status, Lead lead) {
+    private String resolveFrontendAction(CallStatus status, Lead lead, boolean createLeadEnabled) {
         return switch (status) {
-            case CALLING -> "OPEN_CONTACT_FORM";
+            case CALLING -> lead != null ? "OPEN_LEAD_INFO"
+                    : createLeadEnabled ? "OPEN_CONTACT_FORM" : "SKIP_UNKNOWN";
             case ANSWER -> "START_CALL_TIMER";
-            case HANGUP -> lead != null ? "OPEN_TYPIFICATION_FORM" : "ASK_CREATE_LEAD";
+            case HANGUP -> lead != null ? "OPEN_TYPIFICATION_FORM"
+                    : createLeadEnabled ? "ASK_CREATE_LEAD" : "REGISTER_FAILED_ATTEMPT";
             case BUSY, NOANSWER, CANCEL, CONGESTION, CHANUNAVAIL -> "REGISTER_FAILED_ATTEMPT";
         };
+    }
+
+    /**
+     * Envía alerta al admin cuando se llama a un número sin lead y create_lead está desactivado.
+     */
+    void sendUnknownCallAlert(CallEvent callEvent, String callerExtension, Long adminId) {
+        try {
+            AgentEntity agentEntity = agentJpaRepository.findByExtension(callerExtension).orElse(null);
+            if (agentEntity == null || agentEntity.getGroup() == null) return;
+
+            Long resolvedAdminId = adminId != null ? adminId : agentEntity.getGroup().getAdminId();
+            if (!configUseCases.getBooleanValue(resolvedAdminId, "alerts.unknown_call_email")) return;
+
+            String adminEmail = userRepo.findById(resolvedAdminId)
+                    .map(u -> u.getEmail()).orElse(null);
+            if (adminEmail == null || adminEmail.isBlank()) return;
+
+            String agentName = userRepo.findById(agentEntity.getUserId())
+                    .map(u -> u.getName()).orElse(callerExtension);
+
+            String html = EmailService.wrap(
+                    "📵 Llamada a número desconocido",
+                    EmailService.table(
+                            EmailService.row("Agente", agentName),
+                            EmailService.row("Extensión", callerExtension),
+                            EmailService.row("Número marcado", callEvent.getCalledNumber()),
+                            EmailService.row("Hora", OffsetDateTime.now().toString())));
+
+            emailService.send(adminEmail, "Alerta: llamada a número sin lead", html);
+            logger.info("Alerta número desconocido enviada: ext={} número={}",
+                    callerExtension, callEvent.getCalledNumber());
+        } catch (Exception e) {
+            logger.warn("No se pudo enviar alerta de número desconocido: {}", e.getMessage());
+        }
     }
 }

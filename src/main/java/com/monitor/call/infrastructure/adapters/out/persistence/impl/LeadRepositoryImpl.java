@@ -3,6 +3,7 @@ package com.monitor.call.infrastructure.adapters.out.persistence.impl;
 import com.monitor.call.domain.enums.LeadStatus;
 import com.monitor.call.domain.models.Lead;
 import com.monitor.call.domain.ports.out.LeadRepositoryPort;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.LeadEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LeadJpaRepository;
 import com.monitor.call.infrastructure.mappers.LeadMapper;
 import org.springframework.stereotype.Component;
@@ -51,10 +52,18 @@ public class LeadRepositoryImpl implements LeadRepositoryPort {
 
     @Override
     public Optional<Lead> findActiveByPhone(String phone) {
-        return repo.findActiveByContactPhone(phone)
-                .stream()
-                .findFirst()
-                .map(LeadMapper::entityToDomain);
+        // 1. Exact match
+        List<LeadEntity> exact = repo.findActiveByContactPhone(phone);
+        if (!exact.isEmpty()) return exact.stream().findFirst().map(LeadMapper::entityToDomain);
+
+        // 2. Suffix match — strip non-digits and use last 10 digits
+        String digits = phone.replaceAll("\\D", "");
+        if (digits.length() >= 7) {
+            String suffix = digits.substring(Math.max(0, digits.length() - 10));
+            return repo.findActiveByContactPhoneSuffix(suffix)
+                    .stream().findFirst().map(LeadMapper::entityToDomain);
+        }
+        return Optional.empty();
     }
 
     @Override

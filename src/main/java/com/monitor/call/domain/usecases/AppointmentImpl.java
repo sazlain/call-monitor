@@ -4,7 +4,9 @@ import com.monitor.call.domain.enums.AppointmentStatus;
 import com.monitor.call.domain.enums.LeadStatus;
 import com.monitor.call.domain.ports.in.AppointmentUseCases;
 import com.monitor.call.domain.ports.in.LeadUseCases;
+import com.monitor.call.domain.ports.in.SystemConfigUseCases;
 import com.monitor.call.domain.responses.AppointmentResponse;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AppointmentEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.LeadEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
@@ -12,6 +14,7 @@ import com.monitor.call.infrastructure.adapters.out.persistence.repositories.App
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LeadJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.requests.AppointmentRequest;
+import com.monitor.call.infrastructure.services.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -30,17 +33,23 @@ public class AppointmentImpl implements AppointmentUseCases {
     private final AgentJpaRepository       agentRepo;
     private final UserJpaRepository        userRepo;
     private final LeadUseCases             leadUseCases;
+    private final SystemConfigUseCases     configUseCases;
+    private final EmailService             emailService;
 
     public AppointmentImpl(AppointmentJpaRepository appointmentRepo,
                            LeadJpaRepository leadRepo,
                            AgentJpaRepository agentRepo,
                            UserJpaRepository userRepo,
-                           LeadUseCases leadUseCases) {
+                           LeadUseCases leadUseCases,
+                           SystemConfigUseCases configUseCases,
+                           EmailService emailService) {
         this.appointmentRepo = appointmentRepo;
         this.leadRepo        = leadRepo;
         this.agentRepo       = agentRepo;
         this.userRepo        = userRepo;
         this.leadUseCases    = leadUseCases;
+        this.configUseCases  = configUseCases;
+        this.emailService    = emailService;
     }
 
     @Override
@@ -66,6 +75,9 @@ public class AppointmentImpl implements AppointmentUseCases {
         if (request.getLeadId() != null) {
             leadUseCases.updateLeadStatus(request.getLeadId(), LeadStatus.APPOINTMENT, null);
         }
+
+        // Alerta al admin por email
+        sendAppointmentAlert(saved, agentId);
 
         return toResponse(saved);
     }
@@ -95,6 +107,11 @@ public class AppointmentImpl implements AppointmentUseCases {
 
         AppointmentEntity saved = appointmentRepo.save(newAppt);
         logger.info("Cita reagendada: leadId={} newDate={}", existing.getLeadId(), request.getAppointmentDate());
+
+        // Lead pasa a APPOINTMENT_RESCHEDULED
+        if (existing.getLeadId() != null) {
+            leadUseCases.updateLeadStatus(existing.getLeadId(), LeadStatus.APPOINTMENT_RESCHEDULED, null);
+        }
 
         return toResponse(saved);
     }
@@ -127,9 +144,11 @@ public class AppointmentImpl implements AppointmentUseCases {
         entity.setStatus(AppointmentStatus.CONFIRMED);
         appointmentRepo.save(entity);
 
-        // Lead pasa a CONVERTED
-        leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.CONVERTED, null);
-        logger.info("Cita confirmada: appointmentId={} leadId={} -> CONVERTED", appointmentId, entity.getLeadId());
+        // Lead se mantiene en APPOINTMENT (agendada) — confirmación no implica venta
+        if (entity.getLeadId() != null) {
+            leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.APPOINTMENT, null);
+        }
+        logger.info("Cita confirmada: appointmentId={} leadId={} -> APPOINTMENT", appointmentId, entity.getLeadId());
 
         return toResponse(entity);
     }
@@ -183,6 +202,43 @@ public class AppointmentImpl implements AppointmentUseCases {
                 .build();
     }
 
+    // ── Email helpers ─────────────────────────────────────────────────────────
+
+    private void sendAppointmentAlert(AppointmentEntity appt, Long agentId) {
+        try {
+            AgentEntity agentEntity = agentRepo.findById(agentId).orElse(null);
+            if (agentEntity == null || agentEntity.getGroup() == null) return;
+
+            Long adminId = agentEntity.getGroup().getAdminId();
+            if (!configUseCases.getBooleanValue(adminId, "alerts.appointment_email")) return;
+
+            String adminEmail = userRepo.findById(adminId)
+                    .map(u -> u.getEmail()).orElse(null);
+            if (adminEmail == null || adminEmail.isBlank()) return;
+
+            String agentName = userRepo.findById(agentEntity.getUserId())
+                    .map(u -> u.getName()).orElse("Agente " + agentId);
+
+            LeadEntity lead = appt.getLeadId() != null
+                    ? leadRepo.findById(appt.getLeadId()).orElse(null) : null;
+
+            String html = EmailService.wrap(
+                    "📅 Nueva cita agendada",
+                    EmailService.table(
+                            EmailService.row("Agente", agentName),
+                            EmailService.row("Lead", lead != null ? lead.getContactName() : "—"),
+                            EmailService.row("Teléfono", lead != null ? lead.getContactPhone() : "—"),
+                            EmailService.row("Fecha", appt.getAppointmentDate() != null ? appt.getAppointmentDate().toString() : "—"),
+                            EmailService.row("Hora", appt.getAppointmentTime() != null ? appt.getAppointmentTime().toString() : "—"),
+                            EmailService.row("Lugar", appt.getAddress() != null ? appt.getAddress() : "—"),
+                            EmailService.row("Notas", appt.getNotes() != null ? appt.getNotes() : "—")));
+
+            emailService.send(adminEmail, "Nueva cita agendada", html);
+        } catch (Exception e) {
+            logger.warn("No se pudo enviar alerta de cita: {}", e.getMessage());
+        }
+    }
+
     @Override
     @Transactional
     public AppointmentResponse attend(Long appointmentId) {
@@ -192,9 +248,11 @@ public class AppointmentImpl implements AppointmentUseCases {
         entity.setStatus(AppointmentStatus.ATTENDED);
         appointmentRepo.save(entity);
 
-        // Lead pasa a CONVERTED — cita exitosa
-        leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.CONVERTED, null);
-        logger.info("Cita atendida: appointmentId={} leadId={} -> CONVERTED",
+        // Lead se mantiene en APPOINTMENT (agendada) — la conversión es un evento separado
+        if (entity.getLeadId() != null) {
+            leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.APPOINTMENT, null);
+        }
+        logger.info("Cita atendida: appointmentId={} leadId={} -> APPOINTMENT",
                 appointmentId, entity.getLeadId());
 
         return toResponse(entity);

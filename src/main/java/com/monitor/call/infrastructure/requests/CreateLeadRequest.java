@@ -1,5 +1,6 @@
 package com.monitor.call.infrastructure.requests;
 
+import com.monitor.call.domain.enums.LeadStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -20,4 +21,11 @@ public class CreateLeadRequest {
     private LocalDate leadDate;
 
     private Long assignedAgentId;
+
+    /**
+     * Estado inicial del lead. Si no se especifica:
+     * - Creación individual → PENDING
+     * - Carga masiva sin agente asignado → NEW; con agente → PENDING
+     */
+    private LeadStatus status;
 }

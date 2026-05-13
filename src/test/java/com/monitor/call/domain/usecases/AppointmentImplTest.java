@@ -3,6 +3,7 @@ package com.monitor.call.domain.usecases;
 import com.monitor.call.domain.enums.AppointmentStatus;
 import com.monitor.call.domain.enums.LeadStatus;
 import com.monitor.call.domain.ports.in.LeadUseCases;
+import com.monitor.call.domain.ports.in.SystemConfigUseCases;
 import com.monitor.call.domain.responses.AppointmentResponse;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AppointmentEntity;
@@ -13,6 +14,7 @@ import com.monitor.call.infrastructure.adapters.out.persistence.repositories.App
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LeadJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.requests.AppointmentRequest;
+import com.monitor.call.infrastructure.services.EmailService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -38,6 +40,8 @@ class AppointmentImplTest {
     @Mock private AgentJpaRepository agentRepo;
     @Mock private UserJpaRepository userRepo;
     @Mock private LeadUseCases leadUseCases;
+    @Mock private SystemConfigUseCases configUseCases;
+    @Mock private EmailService emailService;
 
     @InjectMocks
     private AppointmentImpl appointmentImpl;
@@ -197,7 +201,7 @@ class AppointmentImplTest {
     // ─── confirm ──────────────────────────────────────────────────────────────
 
     @Test
-    void confirm_existingAppointment_setsStatusToConfirmedAndConvertsLead() {
+    void confirm_existingAppointment_setsStatusToConfirmedAndKeepsAppointmentLead() {
         AppointmentEntity entity = buildEntity(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
         when(appointmentRepo.findById(1L)).thenReturn(Optional.of(entity));
         when(appointmentRepo.save(any())).thenReturn(entity);
@@ -207,7 +211,7 @@ class AppointmentImplTest {
 
         assertThat(resp.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
         verify(appointmentRepo).save(argThat(e -> e.getStatus() == AppointmentStatus.CONFIRMED));
-        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.CONVERTED, null);
+        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.APPOINTMENT, null);
     }
 
     @Test
@@ -221,7 +225,7 @@ class AppointmentImplTest {
     // ─── attend ───────────────────────────────────────────────────────────────
 
     @Test
-    void attend_existingAppointment_setsStatusToAttendedAndConvertsLead() {
+    void attend_existingAppointment_setsStatusToAttendedAndKeepsAppointmentLead() {
         AppointmentEntity entity = buildEntity(1L, 5L, 10L, AppointmentStatus.CONFIRMED);
         when(appointmentRepo.findById(1L)).thenReturn(Optional.of(entity));
         when(appointmentRepo.save(any())).thenReturn(entity);
@@ -231,7 +235,7 @@ class AppointmentImplTest {
 
         assertThat(resp.getStatus()).isEqualTo(AppointmentStatus.ATTENDED);
         verify(appointmentRepo).save(argThat(e -> e.getStatus() == AppointmentStatus.ATTENDED));
-        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.CONVERTED, null);
+        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.APPOINTMENT, null);
     }
 
     @Test

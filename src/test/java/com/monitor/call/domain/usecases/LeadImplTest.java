@@ -2,6 +2,8 @@ package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.enums.LeadStatus;
 import com.monitor.call.domain.models.Lead;
+import com.monitor.call.domain.ports.in.SystemConfigUseCases;
+import com.monitor.call.domain.ports.out.AgentRepositoryPort;
 import com.monitor.call.domain.ports.out.LeadRepositoryPort;
 import com.monitor.call.domain.responses.BulkLeadResponse;
 import com.monitor.call.domain.responses.LeadResponse;
@@ -10,6 +12,7 @@ import com.monitor.call.infrastructure.adapters.out.persistence.entities.UserEnt
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.requests.CreateLeadRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -23,6 +26,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class LeadImplTest {
@@ -30,9 +34,18 @@ class LeadImplTest {
     @Mock private LeadRepositoryPort leadRepo;
     @Mock private UserJpaRepository userRepo;
     @Mock private AgentJpaRepository agentRepo;
+    @Mock private AgentRepositoryPort agentRepositoryPort;
+    @Mock private SystemConfigUseCases configUseCases;
 
     @InjectMocks
     private LeadImpl leadImpl;
+
+    @BeforeEach
+    void setUp() {
+        // Por defecto el modo de asignación es MANUAL — round-robin no se activa
+        // lenient() evita UnnecessaryStubbing en tests que no invocan createLead/createBulkLeads
+        lenient().when(configUseCases.getValue(any(), eq("leads.assignment_mode"))).thenReturn("MANUAL");
+    }
 
     // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -62,28 +75,44 @@ class LeadImplTest {
     // ─── createLead ───────────────────────────────────────────────────────────────
 
     @Test
-    void createLead_withoutAgent_createsLeadWithNewStatus() {
+    void createLead_withoutStatusField_defaultsToPending() {
+        // Sin status explícito → el default es PENDING (independientemente del agente asignado)
         CreateLeadRequest req = buildRequest("Juan", "5551234567");
-        Lead saved = buildSavedLead(1L, 5L, LeadStatus.NEW);
+        Lead saved = buildSavedLead(1L, 5L, LeadStatus.PENDING);
         when(leadRepo.save(any())).thenReturn(saved);
         when(userRepo.findById(5L)).thenReturn(Optional.of(buildUserEntity(5L, "Owner")));
 
         LeadResponse resp = leadImpl.createLead(req, 5L);
 
         assertThat(resp.getId()).isEqualTo(1L);
-        assertThat(resp.getStatus()).isEqualTo(LeadStatus.NEW);
-        verify(leadRepo).save(argThat(l -> l.getStatus() == LeadStatus.NEW));
+        assertThat(resp.getStatus()).isEqualTo(LeadStatus.PENDING);
+        verify(leadRepo).save(argThat(l -> l.getStatus() == LeadStatus.PENDING));
     }
 
     @Test
-    void createLead_withAssignedAgent_createsLeadWithPendingStatus() {
+    void createLead_withExplicitStatus_usesProvidedStatus() {
+        // Status explícito en el request → se usa tal cual
         CreateLeadRequest req = CreateLeadRequest.builder()
                 .contactName("Ana").contactPhone("5559999").leadSource("REF")
-                .assignedAgentId(10L).build();
-        Lead saved = buildSavedLead(2L, 5L, LeadStatus.PENDING);
+                .status(LeadStatus.INTERESTED).build();
+        Lead saved = buildSavedLead(2L, 5L, LeadStatus.INTERESTED);
         when(leadRepo.save(any())).thenReturn(saved);
         when(userRepo.findById(5L)).thenReturn(Optional.of(buildUserEntity(5L, "Owner")));
-        // assignedAgentId is null in saved lead (buildSavedLead), so agentRepo not called in toResponse
+
+        LeadResponse resp = leadImpl.createLead(req, 5L);
+
+        assertThat(resp.getStatus()).isEqualTo(LeadStatus.INTERESTED);
+        verify(leadRepo).save(argThat(l -> l.getStatus() == LeadStatus.INTERESTED));
+    }
+
+    @Test
+    void createLead_withAssignedAgentNoStatus_defaultsToPending() {
+        CreateLeadRequest req = CreateLeadRequest.builder()
+                .contactName("Carlos").contactPhone("5558888")
+                .assignedAgentId(10L).build();
+        Lead saved = buildSavedLead(3L, 5L, LeadStatus.PENDING);
+        when(leadRepo.save(any())).thenReturn(saved);
+        when(userRepo.findById(5L)).thenReturn(Optional.of(buildUserEntity(5L, "Owner")));
 
         LeadResponse resp = leadImpl.createLead(req, 5L);
 

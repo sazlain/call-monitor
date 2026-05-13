@@ -1,6 +1,7 @@
 package com.monitor.call.infrastructure.adapters.in.controllers;
 
 import com.monitor.call.domain.enums.LeadStatus;
+import java.util.Arrays;
 import com.monitor.call.domain.ports.in.LeadUseCases;
 import com.monitor.call.domain.responses.BulkLeadResponse;
 import com.monitor.call.domain.responses.LeadResponse;
@@ -51,7 +52,7 @@ public class LeadController {
 
     @PostMapping(value = "/bulk", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'SALES_AGENT')")
-    @Operation(summary = "Carga masiva de leads desde CSV. Columnas: contact_name,contact_phone,lead_source,lead_date,notes")
+    @Operation(summary = "Carga masiva de leads desde CSV. Columnas: contact_name,contact_phone,lead_source,lead_date,notes,status")
     public ResponseEntity<BulkLeadResponse> bulkCreate(
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) Long assignedAgentId,
@@ -137,35 +138,71 @@ public class LeadController {
     }
 
     /**
-     * Parsea el CSV con columnas: contact_name,contact_phone,lead_source,lead_date,notes
-     * La primera fila se asume como header y se omite.
+     * Parsea el CSV con columnas (el orden importa, el header define la posición):
+     *   contact_name*, contact_phone*, lead_source, lead_date, notes, status
+     *
+     * La columna status es opcional; valores válidos: NEW, PENDING, CALLED, CONTACTED,
+     * INTERESTED, CONVERTED, CALLBACK, DISCARDED, APPOINTMENT.
+     * Si está vacía o ausente se aplica el fallback (PENDING con agente / NEW sin agente).
      */
     private List<CreateLeadRequest> parseCsv(MultipartFile file) {
         List<CreateLeadRequest> leads = new ArrayList<>();
         try (CSVReader reader = new CSVReader(new InputStreamReader(file.getInputStream()))) {
             List<String[]> rows = reader.readAll();
-            // Saltar header
+            if (rows.isEmpty()) return leads;
+
+            // Detectar posición de cada columna por nombre de header (case-insensitive)
+            String[] headers = Arrays.stream(rows.get(0))
+                    .map(h -> h.trim().toLowerCase().replace(" ", "_"))
+                    .toArray(String[]::new);
+            int iName   = indexOf(headers, "contact_name");
+            int iPhone  = indexOf(headers, "contact_phone");
+            int iSource = indexOf(headers, "lead_source");
+            int iDate   = indexOf(headers, "lead_date");
+            int iNotes  = indexOf(headers, "notes");
+            int iStatus = indexOf(headers, "status");
+
             for (int i = 1; i < rows.size(); i++) {
                 String[] row = rows.get(i);
-                if (row.length < 2) continue;
+                if (row.length == 0 || (row.length == 1 && row[0].isBlank())) continue;
+
                 LocalDate date = null;
                 try {
-                    if (row.length > 3 && !row[3].isBlank())
-                        date = LocalDate.parse(row[3].trim());
-                } catch (Exception e) {
-                    date = LocalDate.now();
+                    String rawDate = get(row, iDate);
+                    if (!rawDate.isBlank()) date = LocalDate.parse(rawDate);
+                } catch (Exception ignored) { }
+
+                LeadStatus status = null;
+                try {
+                    String rawStatus = get(row, iStatus).toUpperCase();
+                    if (!rawStatus.isBlank()) status = LeadStatus.valueOf(rawStatus);
+                } catch (IllegalArgumentException e) {
+                    // valor de status inválido → se usará el fallback en el use case
                 }
+
                 leads.add(CreateLeadRequest.builder()
-                        .contactName(row[0].trim())
-                        .contactPhone(row[1].trim())
-                        .leadSource(row.length > 2 ? row[2].trim() : null)
+                        .contactName(get(row, iName))
+                        .contactPhone(get(row, iPhone))
+                        .leadSource(get(row, iSource))
                         .leadDate(date != null ? date : LocalDate.now())
-                        .notes(row.length > 4 ? row[4].trim() : null)
+                        .notes(get(row, iNotes))
+                        .status(status)
                         .build());
             }
         } catch (Exception e) {
             throw new RuntimeException("Error al parsear CSV: " + e.getMessage());
         }
         return leads;
+    }
+
+    /** Devuelve el índice de una columna por nombre, -1 si no existe. */
+    private int indexOf(String[] headers, String name) {
+        for (int i = 0; i < headers.length; i++) if (headers[i].equals(name)) return i;
+        return -1;
+    }
+
+    /** Lee una celda de la fila de forma segura; retorna "" si la columna no existe. */
+    private String get(String[] row, int index) {
+        return (index >= 0 && index < row.length) ? row[index].trim() : "";
     }
 }

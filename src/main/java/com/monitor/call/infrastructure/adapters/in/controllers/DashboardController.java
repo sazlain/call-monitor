@@ -10,8 +10,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/dashboard")
@@ -92,6 +94,24 @@ public class DashboardController {
         Long ownerId = jwtUtil.extractUserId(auth.substring(7));
         OffsetDateTime[] range = resolveRange(from, to);
         return ResponseEntity.ok(dashUseCases.getSalesDashboard(ownerId, range[0], range[1]));
+    }
+
+    /**
+     * Cumplimiento de horario por agente y día.
+     */
+    @GetMapping("/adherence")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Cumplimiento de horario por agente y día.")
+    public ResponseEntity<List<ScheduleAdherenceRow>> scheduleAdherence(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Long agentId,
+            @RequestHeader("Authorization") String auth) {
+
+        Long adminId = jwtUtil.extractUserId(auth.substring(7));
+        LocalDate resolvedFrom = from != null ? from : LocalDate.now().minusDays(6);
+        LocalDate resolvedTo   = to   != null ? to   : LocalDate.now();
+        return ResponseEntity.ok(dashUseCases.getScheduleAdherence(adminId, resolvedFrom, resolvedTo, agentId));
     }
 
     /**

@@ -27,5 +27,7 @@ public class CallEvent {
     private String calledNumber;
     private String callAPIID;
     private OffsetDateTime createdAt;
+    /** Duración en segundos calculada: diferencia entre el evento HANGUP y el ANSWER del mismo callId. */
+    private Long durationSeconds;
 
 }

@@ -38,7 +38,16 @@ public class WebhookIpFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        if (!WEBHOOK_PATH.equals(request.getRequestURI())) {
+        String uri = request.getRequestURI();
+
+        // Log de diagnóstico para cualquier request al área de eventos/webhook
+        if (uri.startsWith("/api/events")) {
+            logger.info("REQUEST /api/events: method={} uri={} contentType={} remoteAddr={} X-Forwarded-For={}",
+                    request.getMethod(), uri, request.getContentType(),
+                    request.getRemoteAddr(), request.getHeader("X-Forwarded-For"));
+        }
+
+        if (!WEBHOOK_PATH.equals(uri)) {
             filterChain.doFilter(request, response);
             return;
         }

@@ -62,6 +62,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/groups/**").hasRole("ADMIN")
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
                 .requestMatchers("/api/reports/**").hasRole("ADMIN")
+                .requestMatchers("/api/admin/config/**").hasRole("ADMIN")
+                .requestMatchers("/api/admin/goals/**").hasRole("ADMIN")
+                // CALL_AGENT — metas propias
+                .requestMatchers("/api/goals/my").hasRole("CALL_AGENT")
                 // ADMIN + SALES_AGENT
                 .requestMatchers(HttpMethod.POST, "/api/leads/**").hasAnyRole("ADMIN", "SALES_AGENT",  "CALL_AGENT")
                 .requestMatchers(HttpMethod.POST, "/api/leads/**").hasAnyRole("ADMIN", "SALES_AGENT",  "CALL_AGENT")

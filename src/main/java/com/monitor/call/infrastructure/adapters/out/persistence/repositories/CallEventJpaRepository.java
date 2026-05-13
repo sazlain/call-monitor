@@ -40,8 +40,25 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
 
     // ── Bloque 2: Duracion — nativeQuery porque JPQL no soporta self-JOIN con ON ──
 
-    @Query(value = "SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (h.created_at - a.created_at))), 0) FROM call_events a JOIN call_events h ON h.call_id = a.call_id AND h.call_status = 'HANGUP' WHERE a.caller_extension = :ext AND a.call_status = 'ANSWER' AND a.created_at BETWEEN :from AND :to", nativeQuery = true)
+    @Query(value = """
+        SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (h.created_at - a.created_at))), 0)
+        FROM call_events a
+        JOIN call_events h ON h.call_id = a.call_id AND h.call_status = 'HANGUP'
+        WHERE a.caller_extension = :ext AND a.call_status = 'ANSWER'
+          AND a.created_at BETWEEN :from AND :to
+          AND EXTRACT(EPOCH FROM (h.created_at - a.created_at)) > 0
+        """, nativeQuery = true)
     Double sumDurationSeconds(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
+
+    /** Cuenta solo las llamadas completadas (con HANGUP), para usar como denominador del promedio. */
+    @Query(value = """
+        SELECT COUNT(DISTINCT a.call_id)
+        FROM call_events a
+        JOIN call_events h ON h.call_id = a.call_id AND h.call_status = 'HANGUP'
+        WHERE a.caller_extension = :ext AND a.call_status = 'ANSWER'
+          AND a.created_at BETWEEN :from AND :to
+        """, nativeQuery = true)
+    long countCompletedCalls(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
     @Query(value = "SELECT MAX(EXTRACT(EPOCH FROM (h.created_at - a.created_at))) FROM call_events a JOIN call_events h ON h.call_id = a.call_id AND h.call_status = 'HANGUP' WHERE a.caller_extension = :ext AND a.call_status = 'ANSWER' AND a.created_at BETWEEN :from AND :to", nativeQuery = true)
     Double maxDurationSeconds(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
@@ -68,7 +85,16 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
 
     // ── Bloque 5: Estado en tiempo real ──────────────────────────────────────
 
-    @Query(value = "SELECT DISTINCT caller_extension FROM call_events e WHERE caller_extension IN :extensions AND call_status IN ('CALLING','ANSWER') AND created_at = (SELECT MAX(e2.created_at) FROM call_events e2 WHERE e2.call_id = e.call_id)", nativeQuery = true)
+    @Query(value = """
+        SELECT DISTINCT e.caller_extension
+        FROM call_events e
+        WHERE e.caller_extension IN :extensions
+          AND e.call_status IN ('CALLING','ANSWER')
+          AND e.created_at > NOW() - INTERVAL '4 hours'
+          AND e.created_at = (
+              SELECT MAX(e2.created_at) FROM call_events e2 WHERE e2.call_id = e.call_id
+          )
+        """, nativeQuery = true)
     List<String> findActiveExtensions(@Param("extensions") List<String> extensions);
 
     @Query("SELECT e FROM CallEventEntity e WHERE e.callerExtension = :ext ORDER BY e.createdAt DESC")
@@ -80,12 +106,47 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
 
-    @Query("SELECT e FROM CallEventEntity e WHERE e.callerExtension IN :extensions ORDER BY e.createdAt DESC")
-    List<CallEventEntity> findRecentEvents(@Param("extensions") List<String> extensions, Pageable pageable);
+    /**
+     * Devuelve un evento por llamada (el último), con duración calculada.
+     * Columnas: id, call_id, caller_id_num, caller_id_name, called_number,
+     *           call_status, call_flow, caller_extension, created_at, duration_seconds.
+     */
+    @Query(value = """
+        SELECT e.id, e.call_id, e.caller_id_num, e.caller_id_name, e.called_number,
+               e.call_status, e.call_flow, e.caller_extension, e.created_at,
+               (SELECT EXTRACT(EPOCH FROM (e.created_at - a.created_at))::bigint
+                FROM call_events a
+                WHERE a.call_id = e.call_id AND a.call_status = 'ANSWER'
+                ORDER BY a.created_at DESC LIMIT 1) AS duration_seconds
+        FROM call_events e
+        WHERE e.caller_extension IN :extensions
+          AND e.created_at = (
+              SELECT MAX(e2.created_at) FROM call_events e2 WHERE e2.call_id = e.call_id
+          )
+        ORDER BY e.created_at DESC
+        """, nativeQuery = true)
+    List<Object[]> findRecentEvents(@Param("extensions") List<String> extensions, Pageable pageable);
 
     // ── Bloque 6: Resumen por multiples extensiones ───────────────────────────
 
-    @Query(value = "SELECT caller_extension, COUNT(DISTINCT CASE WHEN call_status = 'CALLING' THEN call_id END), COUNT(DISTINCT CASE WHEN call_status = 'ANSWER' THEN call_id END), COUNT(DISTINCT CASE WHEN call_status IN ('NOANSWER','BUSY','CANCEL','CONGESTION','CHANUNAVAIL') THEN call_id END) FROM call_events WHERE caller_extension IN :extensions AND created_at BETWEEN :from AND :to GROUP BY caller_extension", nativeQuery = true)
+    /**
+     * Resumen por extensión filtrando cada contador por el evento relevante,
+     * igual que las queries individuales del dashboard de agente.
+     * Columnas: [0]=extension, [1]=totalCalls, [2]=answeredCalls, [3]=missedCalls
+     */
+    @Query(value = """
+        SELECT caller_extension,
+          COUNT(DISTINCT CASE WHEN call_status = 'CALLING'
+                              AND created_at BETWEEN :from AND :to THEN call_id END)      AS total_calls,
+          COUNT(DISTINCT CASE WHEN call_status = 'ANSWER'
+                              AND created_at BETWEEN :from AND :to THEN call_id END)      AS answered_calls,
+          COUNT(DISTINCT CASE WHEN call_status IN ('NOANSWER','BUSY','CANCEL','CONGESTION','CHANUNAVAIL')
+                              AND created_at BETWEEN :from AND :to THEN call_id END)      AS missed_calls
+        FROM call_events
+        WHERE caller_extension IN :extensions
+          AND created_at BETWEEN :from AND :to
+        GROUP BY caller_extension
+        """, nativeQuery = true)
     List<Object[]> getCallSummaryByExtensions(@Param("extensions") List<String> extensions, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
     @Query(value = "SELECT CAST(created_at AS date), caller_extension, COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension IN :extensions AND call_status = 'CALLING' AND created_at BETWEEN :from AND :to GROUP BY CAST(created_at AS date), caller_extension ORDER BY CAST(created_at AS date)", nativeQuery = true)
@@ -101,6 +162,26 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
 
     @Query(value = "SELECT DISTINCT caller_extension FROM call_events WHERE caller_extension IN :extensions AND caller_extension NOT IN (SELECT DISTINCT caller_extension FROM call_events WHERE created_at > :since)", nativeQuery = true)
     List<String> findInactiveExtensions(@Param("extensions") List<String> extensions, @Param("since") OffsetDateTime since);
+
+    // ── Schedule Adherence ────────────────────────────────────────────────────
+
+    @Query(value = """
+        SELECT
+            e.caller_extension AS extension,
+            DATE(e.created_at AT TIME ZONE 'UTC') AS day,
+            MIN(e.created_at) AS first_call,
+            MAX(e.created_at) AS last_call,
+            COUNT(DISTINCT e.call_id) AS call_count
+        FROM call_events e
+        WHERE e.caller_extension IN :extensions
+          AND e.created_at BETWEEN :from AND :to
+        GROUP BY e.caller_extension, DATE(e.created_at AT TIME ZONE 'UTC')
+        ORDER BY day, e.caller_extension
+        """, nativeQuery = true)
+    List<Object[]> findDailyActivitySummary(
+            @Param("extensions") List<String> extensions,
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to);
 
     // ── Historial paginado con joins ──────────────────────────────────────────
 

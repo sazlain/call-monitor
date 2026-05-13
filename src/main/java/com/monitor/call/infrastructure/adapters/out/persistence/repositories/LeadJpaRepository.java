@@ -42,4 +42,7 @@ public interface LeadJpaRepository extends JpaRepository<LeadEntity, Long>,
 
     @Query("SELECT l FROM LeadEntity l WHERE l.contactPhone = :phone AND l.status NOT IN ('DISCARDED', 'CONVERTED') ORDER BY l.createdAt DESC")
     List<LeadEntity> findActiveByContactPhone(@Param("phone") String phone);
+
+    @Query("SELECT l FROM LeadEntity l WHERE REPLACE(REPLACE(REPLACE(l.contactPhone, '+', ''), '-', ''), ' ', '') LIKE CONCAT('%', :suffix) AND l.status NOT IN ('DISCARDED', 'CONVERTED') ORDER BY l.createdAt DESC")
+    List<LeadEntity> findActiveByContactPhoneSuffix(@Param("suffix") String suffix);
 }

@@ -144,14 +144,21 @@ class DashboardRepositoryImplTest {
 
     @Test
     void findRecentEvents_returnsMappedList() {
-        CallEventEntity entity = CallEventEntity.builder()
-                .id(1L).callId("CALL-001").callerExtension("1001").build();
-        when(repo.findRecentEvents(any(), any())).thenReturn(List.of(entity));
+        // La query ahora devuelve Object[] con columnas:
+        // [0]=id, [1]=call_id, [2]=caller_id_num, [3]=caller_id_name,
+        // [4]=called_number, [5]=call_status, [6]=call_flow,
+        // [7]=caller_extension, [8]=created_at, [9]=duration_seconds
+        java.sql.Timestamp ts = java.sql.Timestamp.from(java.time.Instant.now());
+        Object[] row = new Object[]{1L, "CALL-001", "5551001", "John", "5550001",
+                "HANGUP", "out", "1001", ts, 120L};
+        when(repo.findRecentEvents(any(), any())).thenReturn(List.<Object[]>of(row));
 
         List<CallEvent> result = dashRepo.findRecentEvents(List.of("1001"), 10);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getCallId()).isEqualTo("CALL-001");
+        assertThat(result.get(0).getDurationSeconds()).isEqualTo(120L);
+        assertThat(result.get(0).getCallerExtension()).isEqualTo("1001");
     }
 
     // ─── findByCallerExtension ────────────────────────────────────────────

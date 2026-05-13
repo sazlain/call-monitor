@@ -1,13 +1,18 @@
 package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.models.CallEvent;
+import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.ports.in.DashboardUseCases;
+import com.monitor.call.domain.ports.in.ScheduleUseCases;
+import com.monitor.call.domain.ports.in.SystemConfigUseCases;
 import com.monitor.call.domain.ports.out.*;
 import com.monitor.call.domain.responses.*;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -24,19 +29,25 @@ public class DashboardImpl implements DashboardUseCases {
     private final UserRepositoryPort userPort;
     private final CallTypificationRepositoryPort typPort;
     private final LeadRepositoryPort leadPort;
+    private final SystemConfigUseCases configUseCases;
+    private final ScheduleUseCases scheduleService;
 
     public DashboardImpl(DashboardRepositoryPort dashRepo,
                          AgentRepositoryPort agentPort,
                          AgentGroupRepositoryPort groupPort,
                          UserRepositoryPort userPort,
                          CallTypificationRepositoryPort typPort,
-                         LeadRepositoryPort leadPort) {
+                         LeadRepositoryPort leadPort,
+                         SystemConfigUseCases configUseCases,
+                         ScheduleUseCases scheduleService) {
         this.dashRepo  = dashRepo;
         this.agentPort = agentPort;
         this.groupPort = groupPort;
         this.userPort  = userPort;
         this.typPort   = typPort;
         this.leadPort  = leadPort;
+        this.configUseCases = configUseCases;
+        this.scheduleService = scheduleService;
     }
 
     // ── Dashboard del agente ─────────────────────────────────────────────────
@@ -55,7 +66,8 @@ public class DashboardImpl implements DashboardUseCases {
 
         Double totalDur  = dashRepo.sumDurationSeconds(extension, from, to);
         long totalDurLong = totalDur != null ? totalDur.longValue() : 0;
-        double avgDur    = answered > 0 ? Math.round((totalDurLong * 1.0 / answered) * 10.0) / 10.0 : 0;
+        long completed   = dashRepo.countCompletedCalls(extension, from, to);
+        double avgDur    = completed > 0 ? Math.round((totalDurLong * 1.0 / completed) * 10.0) / 10.0 : 0;
         Double maxDur    = dashRepo.maxDurationSeconds(extension, from, to);
         Double minDur    = dashRepo.minDurationSeconds(extension, from, to);
         long shortCalls  = dashRepo.countShortCalls(extension, from, to);
@@ -199,10 +211,18 @@ public class DashboardImpl implements DashboardUseCases {
                 }).toList();
 
         List<String> alerts = new ArrayList<>();
+        OffsetDateTime now = OffsetDateTime.now();
+
         List<String> longCallsList = dashRepo.findLongActiveCalls(allExtensions, LONG_CALL_THRESHOLD_SECONDS);
         if (!longCallsList.isEmpty()) alerts.add("Llamadas largas activas (>20min): extensiones " + String.join(", ", longCallsList));
-        List<String> inactive = dashRepo.findInactiveExtensions(allExtensions, OffsetDateTime.now().minusMinutes(INACTIVE_THRESHOLD_MINUTES));
-        if (!inactive.isEmpty()) alerts.add("Agentes inactivos (>30min): extensiones " + String.join(", ", inactive));
+
+        // Alerta de inactividad solo si el horario indica que los agentes deben estar trabajando
+        if (scheduleService.isWithinSchedule(adminId, now)) {
+            int threshold = configUseCases.getIntValue(adminId, "alerts.idle_threshold_minutes");
+            if (threshold <= 0) threshold = (int) INACTIVE_THRESHOLD_MINUTES;
+            List<String> inactive = dashRepo.findInactiveExtensions(allExtensions, now.minusMinutes(threshold));
+            if (!inactive.isEmpty()) alerts.add("Agentes inactivos (>" + threshold + "min): extensiones " + String.join(", ", inactive));
+        }
 
         var adminUser = userPort.findById(adminId).orElse(null);
 
@@ -326,11 +346,110 @@ public class DashboardImpl implements DashboardUseCases {
                 .build();
     }
 
+    // ── Schedule Adherence ───────────────────────────────────────────────────
+
+    @Override
+    public List<ScheduleAdherenceRow> getScheduleAdherence(Long adminId, LocalDate from, LocalDate to, Long agentId) {
+        List<Agent> agents = agentId != null
+                ? agentPort.findById(agentId).map(List::of).orElse(List.of())
+                : agentPort.findByAdminId(adminId);
+
+        if (agents.isEmpty()) return List.of();
+
+        List<String> extensions = agents.stream().map(Agent::getExtension).toList();
+
+        OffsetDateTime fromOdt = from.atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime toOdt   = to.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+
+        List<Object[]> rawRows = dashRepo.findDailyActivitySummary(extensions, fromOdt, toOdt);
+
+        // Map key: "extension|date" → Object[]{firstCall, lastCall, callCount}
+        Map<String, Object[]> activityMap = new HashMap<>();
+        for (Object[] r : rawRows) {
+            String ext      = r[0].toString();
+            LocalDate day   = toLocalDate(r[1]);
+            OffsetDateTime first = toOdt2(r[2]);
+            OffsetDateTime last  = toOdt2(r[3]);
+            long count      = r[4] instanceof Number n ? n.longValue() : 0L;
+            if (day != null) activityMap.put(ext + "|" + day, new Object[]{first, last, count});
+        }
+
+        List<ScheduleAdherenceRow> result = new ArrayList<>();
+        for (Agent agent : agents) {
+            String name = userPort.findById(agent.getUserId()).map(u -> u.getName()).orElse(agent.getExtension());
+            for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+                ScheduleUseCases.ScheduleWindow window = scheduleService.getWindowForDay(adminId, date);
+                Object[] activity = activityMap.get(agent.getExtension() + "|" + date);
+
+                OffsetDateTime firstCall = activity != null ? (OffsetDateTime) activity[0] : null;
+                OffsetDateTime lastCall  = activity != null ? (OffsetDateTime) activity[1] : null;
+                long callCount           = activity != null ? (long) activity[2] : 0L;
+
+                String status = computeAdherenceStatus(window, firstCall, lastCall, callCount);
+                result.add(ScheduleAdherenceRow.builder()
+                        .date(date.toString())
+                        .agentId(agent.getId())
+                        .agentName(name)
+                        .extension(agent.getExtension())
+                        .scheduleType(window.type())
+                        .expectedStart(window.windowStart() != null ? window.windowStart().toString() : null)
+                        .expectedEnd(window.windowEnd() != null ? window.windowEnd().toString() : null)
+                        .firstCallAt(firstCall != null ? firstCall.toLocalTime().toString().substring(0, 5) : null)
+                        .lastCallAt(lastCall != null ? lastCall.toLocalTime().toString().substring(0, 5) : null)
+                        .callCount(callCount)
+                        .status(status)
+                        .build());
+            }
+        }
+
+        result.sort(Comparator.comparing(ScheduleAdherenceRow::getDate)
+                .thenComparing(ScheduleAdherenceRow::getAgentName));
+        return result;
+    }
+
+    private String computeAdherenceStatus(ScheduleUseCases.ScheduleWindow w,
+                                           OffsetDateTime firstCall, OffsetDateTime lastCall, long callCount) {
+        final int GRACE_MINUTES = 15;
+        if ("FREE".equals(w.type())) return "FREE";
+        if (!w.isWorkDay()) return "DAY_OFF";
+        if (callCount == 0) return "ABSENT";
+
+        if ("HOURS_PER_DAY".equals(w.type())) {
+            if (w.windowStart() == null) return "COMPLIANT";
+            LocalTime first = firstCall.toLocalTime();
+            LocalTime last  = lastCall.toLocalTime();
+            boolean withinWindow = !first.isBefore(w.windowStart()) && !last.isAfter(w.windowEnd());
+            return withinWindow ? "COMPLIANT" : "OUT_OF_WINDOW";
+        }
+
+        // FIXED
+        LocalTime first = firstCall.toLocalTime();
+        LocalTime last  = lastCall.toLocalTime();
+        if (first.isAfter(w.windowStart().plusMinutes(GRACE_MINUTES))) return "LATE";
+        if (last.isBefore(w.windowEnd().minusMinutes(GRACE_MINUTES))) return "EARLY_LEAVE";
+        return "COMPLIANT";
+    }
+
+    private LocalDate toLocalDate(Object o) {
+        if (o == null) return null;
+        if (o instanceof LocalDate ld) return ld;
+        try { return LocalDate.parse(o.toString()); } catch (Exception e) { return null; }
+    }
+
+    private OffsetDateTime toOdt2(Object o) {
+        if (o == null) return null;
+        if (o instanceof OffsetDateTime odt) return odt;
+        if (o instanceof java.time.Instant inst) return inst.atOffset(ZoneOffset.UTC);
+        if (o instanceof java.sql.Timestamp ts) return ts.toInstant().atOffset(ZoneOffset.UTC);
+        return null;
+    }
+
     private RecentCallResponse toRecentCall(CallEvent e) {
         return RecentCallResponse.builder()
                 .callId(e.getCallId()).callerIdNum(e.getCallerIdNum())
                 .callerIdName(e.getCallerIdName()).calledNumber(e.getCalledNumber())
                 .finalStatus(e.getCallStatus()).callFlow(e.getCallFlow())
+                .durationSeconds(e.getDurationSeconds())
                 .startedAt(e.getCreatedAt()).build();
     }
 }

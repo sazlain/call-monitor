@@ -14,6 +14,7 @@ public interface DashboardRepositoryPort {
     Double sumDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to);
     Double maxDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to);
     Double minDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to);
+    long countCompletedCalls(String ext, OffsetDateTime from, OffsetDateTime to);
     long countShortCalls(String ext, OffsetDateTime from, OffsetDateTime to);
     long countLongCalls(String ext, OffsetDateTime from, OffsetDateTime to);
     List<Object[]> countByHour(String ext, OffsetDateTime from, OffsetDateTime to);
@@ -28,4 +29,5 @@ public interface DashboardRepositoryPort {
     Double sumDurationByExtensions(List<String> extensions, OffsetDateTime from, OffsetDateTime to);
     List<String> findLongActiveCalls(List<String> extensions, long thresholdSeconds);
     List<String> findInactiveExtensions(List<String> extensions, OffsetDateTime since);
+    List<Object[]> findDailyActivitySummary(List<String> extensions, OffsetDateTime from, OffsetDateTime to);
 }

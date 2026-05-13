@@ -20,6 +20,7 @@ public class AgentMapper {
                 .userId(e.getUserId())
                 .extension(e.getExtension())
                 .active(e.getActive())
+                .adminId(e.getGroup() != null ? e.getGroup().getAdminId() : null)
                 .groupId(e.getGroup() != null ? e.getGroup().getId() : null)
                 .groupName(e.getGroup() != null ? e.getGroup().getName() : null)
                 .createdAt(e.getCreatedAt())
