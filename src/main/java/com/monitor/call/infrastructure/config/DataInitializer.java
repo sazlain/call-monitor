@@ -48,6 +48,7 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         migrateUserRolesConstraint();
+        migrateLicensesStatusConstraint();
         seedSuperAdmin();
         seedInitialPlans();
     }
@@ -77,6 +78,30 @@ public class DataInitializer implements ApplicationRunner {
             logger.info("Constraint user_roles_role_check verificado/actualizado");
         } catch (Exception e) {
             logger.warn("No se pudo actualizar el constraint user_roles_role_check: {}", e.getMessage());
+        }
+    }
+
+    private void migrateLicensesStatusConstraint() {
+        try {
+            jdbc.execute("""
+                DO $$
+                BEGIN
+                  IF EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'licenses_status_check'
+                      AND pg_get_constraintdef(oid) NOT LIKE '%PENDING%'
+                  ) THEN
+                    ALTER TABLE licenses DROP CONSTRAINT licenses_status_check;
+                    ALTER TABLE licenses ADD CONSTRAINT licenses_status_check
+                      CHECK (status IN ('PENDING','TRIAL','ACTIVE','EXPIRED','SUSPENDED'));
+                    RAISE NOTICE 'Constraint licenses_status_check actualizado con PENDING';
+                  END IF;
+                END
+                $$;
+                """);
+            logger.info("Constraint licenses_status_check verificado/actualizado");
+        } catch (Exception e) {
+            logger.warn("No se pudo actualizar el constraint licenses_status_check: {}", e.getMessage());
         }
     }
 
