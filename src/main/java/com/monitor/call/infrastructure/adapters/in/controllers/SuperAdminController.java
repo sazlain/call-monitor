@@ -16,6 +16,7 @@ import com.monitor.call.infrastructure.adapters.out.persistence.repositories.Use
 import com.monitor.call.infrastructure.requests.CreateAdminWithLicenseRequest;
 import com.monitor.call.infrastructure.requests.CreatePlanRequest;
 import com.monitor.call.infrastructure.requests.UpdateLicenseRequest;
+import com.monitor.call.infrastructure.requests.UpdatePlanRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
@@ -168,9 +169,16 @@ public class SuperAdminController {
     // ── Planes ────────────────────────────────────────────────────────────────
 
     @GetMapping("/plans")
-    @Operation(summary = "Lista los planes de licencia disponibles")
-    public ResponseEntity<List<LicensePlanResponse>> listPlans() {
+    @Operation(summary = "Lista los planes activos (para selectores)")
+    public ResponseEntity<List<LicensePlanResponse>> listActivePlans() {
         return ResponseEntity.ok(planRepo.findByActiveTrue().stream()
+                .map(this::toPlanResponse).toList());
+    }
+
+    @GetMapping("/plans/all")
+    @Operation(summary = "Lista todos los planes incluyendo inactivos (gestión)")
+    public ResponseEntity<List<LicensePlanResponse>> listAllPlans() {
+        return ResponseEntity.ok(planRepo.findAll().stream()
                 .map(this::toPlanResponse).toList());
     }
 
@@ -187,6 +195,35 @@ public class SuperAdminController {
                 .active(true)
                 .build());
         return ResponseEntity.status(HttpStatus.CREATED).body(toPlanResponse(plan));
+    }
+
+    @PutMapping("/plans/{planId}")
+    @Operation(summary = "Actualiza un plan de licencia")
+    public ResponseEntity<LicensePlanResponse> updatePlan(@PathVariable Long planId,
+                                                           @RequestBody UpdatePlanRequest req) {
+        LicensePlanEntity plan = planRepo.findById(planId)
+                .orElseThrow(() -> new RuntimeException("Plan no encontrado: " + planId));
+        if (req.getName() != null)             plan.setName(req.getName());
+        if (req.getDescription() != null)      plan.setDescription(req.getDescription());
+        if (req.getDefaultMaxAgents() != null) plan.setDefaultMaxAgents(req.getDefaultMaxAgents());
+        if (req.getPrice() != null)            plan.setPrice(req.getPrice());
+        if (req.getBillingCycle() != null)     plan.setBillingCycle(req.getBillingCycle());
+        if (req.getDurationDays() != null)     plan.setDurationDays(req.getDurationDays());
+        return ResponseEntity.ok(toPlanResponse(planRepo.save(plan)));
+    }
+
+    @DeleteMapping("/plans/{planId}")
+    @Operation(summary = "Elimina un plan: borrado lógico si tiene licencias asociadas, físico si no tiene ninguna")
+    public ResponseEntity<Void> deletePlan(@PathVariable Long planId) {
+        LicensePlanEntity plan = planRepo.findById(planId)
+                .orElseThrow(() -> new RuntimeException("Plan no encontrado: " + planId));
+        if (licenseRepo.existsByPlanId(planId)) {
+            plan.setActive(false);
+            planRepo.save(plan);
+        } else {
+            planRepo.delete(plan);
+        }
+        return ResponseEntity.noContent().build();
     }
 
     // ── Licencias ─────────────────────────────────────────────────────────────
@@ -249,7 +286,9 @@ public class SuperAdminController {
                 .billingCycle(e.getBillingCycle())
                 .durationDays(e.getDurationDays())
                 .active(e.getActive())
+                .licenseCount(licenseRepo.countByPlanId(e.getId()))
                 .createdAt(e.getCreatedAt())
+                .updatedAt(e.getUpdatedAt())
                 .build();
     }
 

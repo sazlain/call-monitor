@@ -17,5 +17,7 @@ public class LicensePlanResponse {
     private BillingCycle billingCycle;
     private Integer durationDays;
     private Boolean active;
+    private long licenseCount;
     private OffsetDateTime createdAt;
+    private OffsetDateTime updatedAt;
 }

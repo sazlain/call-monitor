@@ -16,4 +16,8 @@ public interface LicenseJpaRepository extends JpaRepository<LicenseEntity, Long>
 
     List<LicenseEntity> findByStatusInAndExpirationDateBefore(
             List<LicenseStatus> statuses, OffsetDateTime date);
+
+    boolean existsByPlanId(Long planId);
+
+    long countByPlanId(Long planId);
 }
