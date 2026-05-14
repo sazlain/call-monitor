@@ -51,7 +51,7 @@ public class AgentImpl implements AgentUseCases {
         if (userRepo.existsByEmail(email))
             throw new RuntimeException("El email ya esta registrado");
         if (agentRepo.existsByExtension(extension))
-            throw new RuntimeException("La extension ya esta registrada");
+            throw new RuntimeException("La extensión " + extension + " ya está en uso por otro agente");
 
         // Verificar límite de agentes según licencia
         if (adminId != null) {
@@ -120,7 +120,7 @@ public class AgentImpl implements AgentUseCases {
                 .orElseThrow(() -> new RuntimeException("Agente no encontrado"));
 
         if (!agent.getExtension().equals(extension) && agentRepo.existsByExtension(extension))
-            throw new RuntimeException("La extension ya esta en uso");
+            throw new RuntimeException("La extensión " + extension + " ya está en uso por otro agente");
 
         agent.setExtension(extension);
 
