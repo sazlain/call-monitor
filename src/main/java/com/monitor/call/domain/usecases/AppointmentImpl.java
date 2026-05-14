@@ -15,6 +15,7 @@ import com.monitor.call.infrastructure.adapters.out.persistence.repositories.Lea
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.requests.AppointmentRequest;
 import com.monitor.call.infrastructure.services.EmailService;
+import com.monitor.call.infrastructure.services.EmailTemplates;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -258,16 +259,15 @@ public class AppointmentImpl implements AppointmentUseCases {
             LeadEntity lead = appt.getLeadId() != null
                     ? leadRepo.findById(appt.getLeadId()).orElse(null) : null;
 
-            String html = EmailService.wrap(
-                    "📅 Nueva cita agendada",
-                    EmailService.table(
-                            EmailService.row("Agente", agentName),
-                            EmailService.row("Lead", lead != null ? lead.getContactName() : "—"),
-                            EmailService.row("Teléfono", lead != null ? lead.getContactPhone() : "—"),
-                            EmailService.row("Fecha", appt.getAppointmentDate() != null ? appt.getAppointmentDate().toString() : "—"),
-                            EmailService.row("Hora", appt.getAppointmentTime() != null ? appt.getAppointmentTime().toString() : "—"),
-                            EmailService.row("Lugar", appt.getAddress() != null ? appt.getAddress() : "—"),
-                            EmailService.row("Notas", appt.getNotes() != null ? appt.getNotes() : "—")));
+            String html = EmailTemplates.newAppointment(
+                    agentName,
+                    lead != null ? lead.getContactName() : null,
+                    lead != null ? lead.getContactPhone() : null,
+                    appt.getAppointmentDate() != null ? appt.getAppointmentDate().toString() : null,
+                    appt.getAppointmentTime() != null ? appt.getAppointmentTime().toString() : null,
+                    appt.getAddress(),
+                    appt.getAttendees(),
+                    appt.getNotes());
 
             emailService.send(adminEmail, "Nueva cita agendada", html);
         } catch (Exception e) {

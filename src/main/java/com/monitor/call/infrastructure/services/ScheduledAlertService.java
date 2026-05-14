@@ -17,7 +17,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -82,13 +84,8 @@ public class ScheduledAlertService {
                         .map(a -> a.getUserName() != null ? a.getUserName() : a.getExtension())
                         .reduce((a, b) -> a + ", " + b).orElse(String.join(", ", idleExts));
 
-                String html = EmailService.wrap(
-                        "⏱ Agentes inactivos",
-                        "<p>Los siguientes agentes llevan más de <strong>" + threshold +
-                        " minutos</strong> sin actividad:</p>" +
-                        "<p style='font-size:15px;font-weight:bold;color:#dc2626;'>" + agentNames + "</p>" +
-                        "<p style='color:#6b7280;font-size:13px;'>Hora de verificación: " +
-                        OffsetDateTime.now() + "</p>");
+                String html = EmailTemplates.idleAgentsAlert(
+                        agentNames, threshold, OffsetDateTime.now().toString());
 
                 emailService.send(admin.getEmail(),
                         "Alerta: agentes inactivos (" + idleExts.size() + ")", html);
@@ -118,7 +115,7 @@ public class ScheduledAlertService {
             List<Object[]> summary = dashboardRepo.getCallSummaryByExtensions(extensions, from, to);
             Double totalDuration = dashboardRepo.sumDurationByExtensions(extensions, from, to);
 
-            StringBuilder rows = new StringBuilder();
+            List<String[]> agentRows = new ArrayList<>();
             long totalCalls = 0;
             long totalAnswered = 0;
             for (Object[] row : summary) {
@@ -129,21 +126,15 @@ public class ScheduledAlertService {
                         .filter(a -> ext.equals(a.getExtension()))
                         .map(a -> a.getUserName() != null ? a.getUserName() : ext)
                         .findFirst().orElse(ext);
-                rows.append(EmailService.row(agentName, calls + " llamadas / " + answered + " contestadas"));
+                agentRows.add(new String[]{agentName, String.valueOf(calls), String.valueOf(answered)});
                 totalCalls += calls;
                 totalAnswered += answered;
             }
 
             long durationMinutes = totalDuration != null ? (long) (totalDuration / 60) : 0;
+            String date = LocalDate.now().toString();
 
-            String html = EmailService.wrap(
-                    "📊 Resumen del día",
-                    "<p>Actividad del día para su equipo:</p>" +
-                    EmailService.table(rows.toString()) +
-                    EmailService.table(
-                            EmailService.row("Total llamadas", String.valueOf(totalCalls)),
-                            EmailService.row("Llamadas contestadas", String.valueOf(totalAnswered)),
-                            EmailService.row("Tiempo total en llamadas", durationMinutes + " min")));
+            String html = EmailTemplates.dailySummary(date, agentRows, totalCalls, totalAnswered, durationMinutes);
 
             emailService.send(admin.getEmail(), "Resumen diario — Voxio", html);
             logger.info("Resumen diario enviado a admin={}", admin.getId());
@@ -174,18 +165,20 @@ public class ScheduledAlertService {
 
             if (adminUnmet.isEmpty()) continue;
 
-            StringBuilder rows = new StringBuilder();
+            List<String[]> goalRows = new ArrayList<>();
             for (AgentGoalHistoryResponse h : adminUnmet) {
-                String label = h.getAgentName() + " — " + h.getKpiType() + " (" + h.getPeriod() + ")";
-                String value = h.getActualValue() + " / " + h.getTargetValue() +
-                               " (" + h.getProgressPercent() + "%)";
-                rows.append(EmailService.row(label, value));
+                goalRows.add(new String[]{
+                    h.getAgentName(),
+                    h.getKpiType() != null ? h.getKpiType().name() : "—",
+                    h.getPeriod() != null ? h.getPeriod().name() : "—",
+                    h.getActualValue() != null ? h.getActualValue().toString() : "0",
+                    h.getTargetValue() != null ? h.getTargetValue().toString() : "0",
+                    h.getProgressPercent() != null ? h.getProgressPercent().toString() : "0"
+                });
             }
 
-            String html = EmailService.wrap(
-                    "🎯 Metas no cumplidas hoy",
-                    "<p>Los siguientes agentes no alcanzaron su meta del día:</p>" +
-                    EmailService.table(rows.toString()));
+            String goalDate = LocalDate.now().toString();
+            String html = EmailTemplates.goalsNotMet(goalDate, goalRows);
 
             emailService.send(admin.getEmail(),
                     "Alerta: " + adminUnmet.size() + " metas sin cumplir", html);
@@ -211,21 +204,23 @@ public class ScheduledAlertService {
 
             if (callbacks.isEmpty()) continue;
 
-            StringBuilder rows = new StringBuilder();
+            List<String[]> callbackRows = new ArrayList<>();
             for (Lead lead : callbacks) {
                 String agentName = agents.stream()
                         .filter(a -> a.getId().equals(lead.getAssignedAgentId()))
                         .map(a -> a.getUserName() != null ? a.getUserName() : "Agente " + a.getId())
                         .findFirst().orElse("—");
-                String date = lead.getCallbackDate() != null ? lead.getCallbackDate().toString() : "—";
-                rows.append(EmailService.row(lead.getContactName() + " (" + lead.getContactPhone() + ")",
-                        "Agente: " + agentName + " | Fecha callback: " + date));
+                String cbDate = lead.getCallbackDate() != null ? lead.getCallbackDate().toString() : "—";
+                callbackRows.add(new String[]{
+                    lead.getContactName() != null ? lead.getContactName() : "—",
+                    lead.getContactPhone() != null ? lead.getContactPhone() : "—",
+                    agentName,
+                    cbDate
+                });
             }
 
-            String html = EmailService.wrap(
-                    "📞 Callbacks pendientes",
-                    "<p>Hay <strong>" + callbacks.size() + "</strong> callbacks pendientes para hoy:</p>" +
-                    EmailService.table(rows.toString()));
+            String cbDateStr = LocalDate.now().toString();
+            String html = EmailTemplates.pendingCallbacks(cbDateStr, callbackRows);
 
             emailService.send(admin.getEmail(),
                     "Callbacks pendientes: " + callbacks.size(), html);

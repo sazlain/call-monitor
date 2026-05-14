@@ -11,6 +11,7 @@ import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEn
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.services.EmailService;
+import com.monitor.call.infrastructure.services.EmailTemplates;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -175,13 +176,10 @@ public class CallEventWebSocketHandler {
             String agentName = userRepo.findById(agentEntity.getUserId())
                     .map(u -> u.getName()).orElse(callerExtension);
 
-            String html = EmailService.wrap(
-                    "📵 Llamada a número desconocido",
-                    EmailService.table(
-                            EmailService.row("Agente", agentName),
-                            EmailService.row("Extensión", callerExtension),
-                            EmailService.row("Número marcado", callEvent.getCalledNumber()),
-                            EmailService.row("Hora", OffsetDateTime.now().toString())));
+            String html = EmailTemplates.unknownCallAlert(
+                    agentName, callerExtension,
+                    callEvent.getCalledNumber(),
+                    OffsetDateTime.now().toString());
 
             emailService.send(adminEmail, "Alerta: llamada a número sin lead", html);
             logger.info("Alerta número desconocido enviada: ext={} número={}",

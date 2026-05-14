@@ -58,14 +58,18 @@ public class EmailService {
         }
     }
 
-    // ── Plantillas HTML ───────────────────────────────────────────────────────
+    // ── Plantillas HTML (deprecated — use EmailTemplates instead) ────────────
 
+    /** @deprecated Use {@link EmailTemplates} methods instead. */
+    @Deprecated
     public static String row(String label, String value) {
         return "<tr><td style='padding:4px 8px;color:#6b7280;font-size:13px;'>" + label +
                "</td><td style='padding:4px 8px;font-size:13px;font-weight:500;'>" +
                (value != null ? value : "—") + "</td></tr>";
     }
 
+    /** @deprecated Use {@link EmailTemplates} methods instead. */
+    @Deprecated
     public static String table(String... rows) {
         StringBuilder sb = new StringBuilder(
                 "<table style='border-collapse:collapse;width:100%;margin:12px 0;'>");
@@ -74,6 +78,8 @@ public class EmailService {
         return sb.toString();
     }
 
+    /** @deprecated Use {@link EmailTemplates} methods instead. */
+    @Deprecated
     public static String wrap(String title, String body) {
         return "<div style='font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;" +
                "background:#f9fafb;border-radius:8px;'>" +
