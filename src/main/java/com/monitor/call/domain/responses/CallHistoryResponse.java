@@ -5,8 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.OffsetDateTime;
-
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,7 +18,7 @@ public class CallHistoryResponse {
     private String calledNumber;
     private String callStatus;
     private String callFlow;
-    private OffsetDateTime createdAt;
+    private String createdAt;
     private Long agentId;
     private String agentName;
     private String agentExtension;

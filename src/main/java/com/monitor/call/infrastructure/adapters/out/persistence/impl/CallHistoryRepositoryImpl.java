@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Component
@@ -54,7 +55,7 @@ public class CallHistoryRepositoryImpl implements CallHistoryRepositoryPort {
                 .calledNumber(str(r[5]))
                 .callStatus(str(r[6]))
                 .callFlow(str(r[7]))
-                .createdAt(toOdt(r[8]))
+                .createdAt(toIsoString(r[8]))
                 .agentId(toLong(r[9]))
                 .agentName(str(r[10]))
                 .agentExtension(str(r[11]))
@@ -71,10 +72,18 @@ public class CallHistoryRepositoryImpl implements CallHistoryRepositoryPort {
     private Long toLong(Object o) { return o instanceof Number n ? n.longValue() : null; }
     private String emptyToNull(String s) { return (s == null || s.isBlank()) ? null : s; }
 
-    private OffsetDateTime toOdt(Object o) {
+    /** Convierte cualquier tipo de fecha JDBC a ISO-8601 string para el frontend */
+    private String toIsoString(Object o) {
         if (o == null) return null;
-        if (o instanceof OffsetDateTime odt) return odt;
-        if (o instanceof Timestamp ts) return ts.toInstant().atOffset(ZoneOffset.UTC);
-        return null;
+        if (o instanceof OffsetDateTime odt)
+            return odt.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        if (o instanceof Timestamp ts)
+            return ts.toInstant().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        // Fallback: el driver devuelve el valor como String (ej. "2024-05-13 12:30:00+00")
+        // lo normalizamos a ISO reemplazando el espacio por T
+        String s = o.toString();
+        if (s.contains(" ") && !s.startsWith("["))
+            s = s.replace(" ", "T");
+        return s;
     }
 }
