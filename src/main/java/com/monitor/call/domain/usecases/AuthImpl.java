@@ -53,11 +53,15 @@ public class AuthImpl implements AuthUseCases {
     @Override
     public LoginResponse login(String email, String password) {
         User user = userRepo.findByEmail(email)
-                .filter(u -> u.getActive())
                 .orElseThrow(() -> new RuntimeException("Credenciales invalidas"));
 
         if (!passwordEncoder.matches(password, user.getPassword()))
             throw new RuntimeException("Credenciales invalidas");
+
+        if (!Boolean.TRUE.equals(user.getActive())) {
+            logger.warn("Intento de login con cuenta desactivada: {}", email);
+            throw new RuntimeException("ACCOUNT_DISABLED");
+        }
 
         // Validar licencia (SUPER_ADMIN siempre tiene acceso)
         if (!user.getRoles().contains(Role.SUPER_ADMIN)) {

@@ -124,6 +124,17 @@ public class GlobalExceptionHandler {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
         }
 
+        // Cuenta desactivada
+        if (message.equals("ACCOUNT_DISABLED")) {
+            logger.warn("Acceso bloqueado por cuenta desactivada");
+            ErrorResponse error = new ErrorResponse();
+            error.setId("ERR403");
+            error.setTitle("Cuenta desactivada");
+            error.setMessage("Tu cuenta ha sido desactivada. Contacta al administrador de la plataforma.");
+            error.setHttpStatus(HttpStatus.FORBIDDEN);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        }
+
         // Errores de licencia
         if (message.equals("LICENSE_PENDING")) {
             logger.warn("Acceso bloqueado por licencia pendiente");
