@@ -8,7 +8,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import java.sql.Timestamp;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Component
@@ -52,7 +54,7 @@ public class CallHistoryRepositoryImpl implements CallHistoryRepositoryPort {
                 .calledNumber(str(r[5]))
                 .callStatus(str(r[6]))
                 .callFlow(str(r[7]))
-                .createdAt(r[8] instanceof OffsetDateTime odt ? odt : null)
+                .createdAt(toOdt(r[8]))
                 .agentId(toLong(r[9]))
                 .agentName(str(r[10]))
                 .agentExtension(str(r[11]))
@@ -68,4 +70,11 @@ public class CallHistoryRepositoryImpl implements CallHistoryRepositoryPort {
     private String str(Object o)  { return o != null ? o.toString() : null; }
     private Long toLong(Object o) { return o instanceof Number n ? n.longValue() : null; }
     private String emptyToNull(String s) { return (s == null || s.isBlank()) ? null : s; }
+
+    private OffsetDateTime toOdt(Object o) {
+        if (o == null) return null;
+        if (o instanceof OffsetDateTime odt) return odt;
+        if (o instanceof Timestamp ts) return ts.toInstant().atOffset(ZoneOffset.UTC);
+        return null;
+    }
 }
