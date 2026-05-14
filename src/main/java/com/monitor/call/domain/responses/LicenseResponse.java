@@ -12,11 +12,13 @@ import java.time.OffsetDateTime;
 public class LicenseResponse {
     private Long id;
     private Long adminId;
+    private Long planId;
     private String planName;
     private Integer maxAgents;
     private LicenseStatus status;
     private BillingCycle billingCycle;
     private BigDecimal priceMonthly;
+    private OffsetDateTime activatedAt;
     private OffsetDateTime startDate;
     private OffsetDateTime expirationDate;
     private String notes;

@@ -1,7 +1,10 @@
 package com.monitor.call.infrastructure.config;
 
+import com.monitor.call.domain.enums.BillingCycle;
 import com.monitor.call.domain.enums.Role;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.LicensePlanEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.UserEntity;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LicensePlanJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.Set;
 
 @Component
@@ -29,12 +33,14 @@ public class DataInitializer implements ApplicationRunner {
     private String superAdminPassword;
 
     private final UserJpaRepository userRepo;
+    private final LicensePlanJpaRepository planRepo;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbc;
 
-    public DataInitializer(UserJpaRepository userRepo, PasswordEncoder passwordEncoder,
-                           JdbcTemplate jdbc) {
+    public DataInitializer(UserJpaRepository userRepo, LicensePlanJpaRepository planRepo,
+                           PasswordEncoder passwordEncoder, JdbcTemplate jdbc) {
         this.userRepo = userRepo;
+        this.planRepo = planRepo;
         this.passwordEncoder = passwordEncoder;
         this.jdbc = jdbc;
     }
@@ -43,6 +49,7 @@ public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         migrateUserRolesConstraint();
         seedSuperAdmin();
+        seedInitialPlans();
     }
 
     /**
@@ -98,5 +105,20 @@ public class DataInitializer implements ApplicationRunner {
                 .build());
 
         logger.info("Super admin creado exitosamente: {}", superAdminEmail);
+    }
+
+    private void seedInitialPlans() {
+        if (!planRepo.existsByName("Mensual")) {
+            planRepo.save(LicensePlanEntity.builder()
+                    .name("Mensual")
+                    .description("Plan mensual estándar")
+                    .defaultMaxAgents(5)
+                    .price(new BigDecimal("185000"))
+                    .billingCycle(BillingCycle.MONTHLY)
+                    .durationDays(30)
+                    .active(true)
+                    .build());
+            logger.info("Plan mensual inicial creado: 185,000 COP");
+        }
     }
 }

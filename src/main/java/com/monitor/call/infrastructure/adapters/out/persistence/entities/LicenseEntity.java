@@ -22,6 +22,9 @@ public class LicenseEntity {
     @Column(name = "admin_id", nullable = false, unique = true)
     private Long adminId;
 
+    @Column(name = "plan_id")
+    private Long planId;
+
     @Column(name = "plan_name", nullable = false)
     private String planName;
 
@@ -31,15 +34,18 @@ public class LicenseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     @Builder.Default
-    private LicenseStatus status = LicenseStatus.TRIAL;
+    private LicenseStatus status = LicenseStatus.PENDING;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "billing_cycle", nullable = false)
     @Builder.Default
     private BillingCycle billingCycle = BillingCycle.MONTHLY;
 
-    @Column(name = "price_monthly", precision = 10, scale = 2)
+    @Column(name = "price_monthly", precision = 12, scale = 2)
     private BigDecimal priceMonthly;
+
+    @Column(name = "activated_at")
+    private OffsetDateTime activatedAt;
 
     @Column(name = "start_date")
     private OffsetDateTime startDate;

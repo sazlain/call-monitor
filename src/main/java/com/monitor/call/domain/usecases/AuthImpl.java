@@ -99,6 +99,10 @@ public class AuthImpl implements AuthUseCases {
         LicenseEntity license = licenseRepo.findByAdminId(adminId).orElse(null);
         if (license == null) return; // sin licencia configurada, permitir (período de gracia)
 
+        if (license.getStatus() == LicenseStatus.PENDING) {
+            logger.warn("Acceso bloqueado: licencia PENDING (sin activar) para adminId={}", adminId);
+            throw new RuntimeException("LICENSE_PENDING");
+        }
         if (license.getStatus() == LicenseStatus.EXPIRED) {
             logger.warn("Acceso bloqueado: licencia EXPIRED para adminId={}", adminId);
             throw new RuntimeException("LICENSE_EXPIRED");

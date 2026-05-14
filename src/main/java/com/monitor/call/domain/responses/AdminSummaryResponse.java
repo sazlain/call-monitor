@@ -8,11 +8,16 @@ import java.time.OffsetDateTime;
 
 @Data @Builder
 public class AdminSummaryResponse {
-    private Long adminId;
+    private Long id;
     private String name;
     private String email;
     private Boolean active;
-    private Integer agentCount;
-    private LicenseResponse license;
+    private Integer usedAgents;
+    private Integer maxAgents;
+    private String planName;
+    private LicenseStatus licenseStatus;
+    private Long licenseId;
+    private OffsetDateTime activatedAt;
+    private OffsetDateTime expirationDate;
     private OffsetDateTime createdAt;
 }
