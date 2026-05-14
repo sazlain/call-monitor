@@ -14,7 +14,6 @@ public interface DashboardRepositoryPort {
     Double sumDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to);
     Double maxDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to);
     Double minDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to);
-    long countCompletedCalls(String ext, OffsetDateTime from, OffsetDateTime to);
     long countShortCalls(String ext, OffsetDateTime from, OffsetDateTime to);
     long countLongCalls(String ext, OffsetDateTime from, OffsetDateTime to);
     List<Object[]> countByHour(String ext, OffsetDateTime from, OffsetDateTime to);

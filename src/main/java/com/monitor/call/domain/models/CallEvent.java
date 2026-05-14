@@ -1,5 +1,6 @@
 package com.monitor.call.domain.models;
 
+import com.google.gson.Gson;
 import com.monitor.call.domain.enums.CallFlow;
 import com.monitor.call.domain.enums.CallStatus;
 import lombok.AllArgsConstructor;
@@ -27,7 +28,9 @@ public class CallEvent {
     private String calledNumber;
     private String callAPIID;
     private OffsetDateTime createdAt;
-    /** Duración en segundos calculada: diferencia entre el evento HANGUP y el ANSWER del mismo callId. */
-    private Long durationSeconds;
 
+    @Override
+    public String toString() {
+        return new Gson().toJson(this);
+    }
 }

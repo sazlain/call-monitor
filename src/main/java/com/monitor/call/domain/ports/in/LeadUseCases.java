@@ -16,6 +16,7 @@ public interface LeadUseCases {
     List<LeadResponse> listPendingCallbacks(Long userId);
     LeadResponse updateLead(Long leadId, CreateLeadRequest request, Long requesterId);
     LeadResponse assignLead(Long leadId, Long assignedAgentId, Long requesterId);
+    LeadResponse takeLead(Long leadId, Long userId);
     void discardLead(Long leadId, Long requesterId);
     LeadResponse updateLeadStatus(Long leadId, LeadStatus status, LocalDate callbackDate);
 }

@@ -1,7 +1,5 @@
 package com.monitor.call.infrastructure.adapters.out.persistence.impl;
 
-import com.monitor.call.domain.enums.CallFlow;
-import com.monitor.call.domain.enums.CallStatus;
 import com.monitor.call.domain.models.CallEvent;
 import com.monitor.call.domain.ports.out.DashboardRepositoryPort;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.CallEventJpaRepository;
@@ -10,7 +8,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,7 +26,6 @@ public class DashboardRepositoryImpl implements DashboardRepositoryPort {
     @Override public Double sumDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.sumDurationSeconds(ext, from, to); }
     @Override public Double maxDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.maxDurationSeconds(ext, from, to); }
     @Override public Double minDurationSeconds(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.minDurationSeconds(ext, from, to); }
-    @Override public long countCompletedCalls(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.countCompletedCalls(ext, from, to); }
     @Override public long countShortCalls(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.countShortCalls(ext, from, to); }
     @Override public long countLongCalls(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.countLongCalls(ext, from, to); }
     @Override public List<Object[]> countByHour(String ext, OffsetDateTime from, OffsetDateTime to) { return repo.countByHour(ext, from, to); }
@@ -45,36 +41,7 @@ public class DashboardRepositoryImpl implements DashboardRepositoryPort {
     @Override
     public List<CallEvent> findRecentEvents(List<String> extensions, int limit) {
         return repo.findRecentEvents(extensions, PageRequest.of(0, limit))
-                .stream().map(this::recentRowToDomain).toList();
-    }
-
-    /**
-     * Mapea la fila Object[] devuelta por findRecentEvents al modelo de dominio.
-     * Columnas: [0]=id, [1]=call_id, [2]=caller_id_num, [3]=caller_id_name,
-     *           [4]=called_number, [5]=call_status, [6]=call_flow,
-     *           [7]=caller_extension, [8]=created_at, [9]=duration_seconds
-     */
-    private CallEvent recentRowToDomain(Object[] row) {
-        return CallEvent.builder()
-                .id(row[0] != null ? ((Number) row[0]).longValue() : null)
-                .callId(row[1] != null ? row[1].toString() : null)
-                .callerIdNum(row[2] != null ? row[2].toString() : null)
-                .callerIdName(row[3] != null ? row[3].toString() : null)
-                .calledNumber(row[4] != null ? row[4].toString() : null)
-                .callStatus(row[5] != null ? CallStatus.valueOf(row[5].toString()) : null)
-                .callFlow(row[6] != null ? CallFlow.valueOf(row[6].toString()) : null)
-                .callerExtension(row[7] != null ? row[7].toString() : null)
-                .createdAt(row[8] != null ? toOdt(row[8]) : null)
-                .durationSeconds(row[9] != null ? ((Number) row[9]).longValue() : null)
-                .build();
-    }
-
-    private OffsetDateTime toOdt(Object o) {
-        if (o instanceof OffsetDateTime odt) return odt;
-        if (o instanceof java.time.Instant inst) return inst.atOffset(ZoneOffset.UTC);
-        if (o instanceof java.sql.Timestamp ts) return ts.toInstant().atOffset(ZoneOffset.UTC);
-        if (o instanceof java.time.LocalDateTime ldt) return ldt.atOffset(ZoneOffset.UTC);
-        return null;
+                .stream().map(CallEventMapper::entityToDomain).toList();
     }
 
     @Override

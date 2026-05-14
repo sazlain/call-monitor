@@ -39,6 +39,9 @@ public class LeadRepositoryImpl implements LeadRepositoryPort {
     @Override public List<Lead> findAssignedPendingLeads(Long agentId) {
         return repo.findAssignedPendingLeads(agentId).stream().map(LeadMapper::entityToDomain).toList();
     }
+    @Override public List<Lead> findAllActiveByAdminId(Long adminId) {
+        return repo.findAllActiveByAdminId(adminId).stream().map(LeadMapper::entityToDomain).toList();
+    }
 
     @Override
     public List<Lead> findPendingCallbacks(Long userId, Long agentId) {

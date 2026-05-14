@@ -125,6 +125,16 @@ public class LeadController {
         return ResponseEntity.ok(leadUseCases.assignLead(leadId, request.getAssignedAgentId(), requesterId));
     }
 
+    @PostMapping("/{leadId}/take")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_AGENT', 'CALL_AGENT')")
+    @Operation(summary = "El agente toma un lead libre para sí mismo")
+    public ResponseEntity<LeadResponse> take(
+            @PathVariable Long leadId,
+            @RequestHeader("Authorization") String auth) {
+        Long userId = jwtUtil.extractUserId(auth.substring(7));
+        return ResponseEntity.ok(leadUseCases.takeLead(leadId, userId));
+    }
+
     @DeleteMapping("/{leadId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SALES_AGENT')")
     @Operation(summary = "Descartar un lead")

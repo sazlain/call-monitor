@@ -96,12 +96,9 @@ public class DashboardController {
         return ResponseEntity.ok(dashUseCases.getSalesDashboard(ownerId, range[0], range[1]));
     }
 
-    /**
-     * Cumplimiento de horario por agente y día.
-     */
     @GetMapping("/adherence")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Cumplimiento de horario por agente y día.")
+    @Operation(summary = "Cumplimiento de horarios por agente y día.")
     public ResponseEntity<List<ScheduleAdherenceRow>> scheduleAdherence(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,

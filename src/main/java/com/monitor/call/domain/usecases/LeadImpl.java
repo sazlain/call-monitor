@@ -164,13 +164,20 @@ public class LeadImpl implements LeadUseCases {
 
     @Override
     public List<LeadResponse> listAssignedLeads(Long userId) {
-        // Convertir userId → agentId (leads.assigned_agent_id referencia agents.id)
-        Long agentId = agentRepo.findByUserId(userId)
-                .map(a -> a.getId())
+        var agentEntity = agentRepo.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Agente no encontrado para userId: " + userId));
-        return leadRepo.findAssignedPendingLeads(agentId).stream()
-                .map(this::toResponse)
-                .toList();
+        Long agentId = agentEntity.getId();
+
+        // Si leads son públicos, el agente ve todos los leads activos del admin
+        Long adminId = agentEntity.getGroup() != null ? agentEntity.getGroup().getAdminId() : null;
+        boolean isPublic = adminId != null
+                && configUseCases.getBooleanValue(adminId, "leads.visibility");
+
+        List<Lead> leads = isPublic
+                ? leadRepo.findAllActiveByAdminId(adminId)
+                : leadRepo.findAssignedPendingLeads(agentId);
+
+        return leads.stream().map(this::toResponse).toList();
     }
 
     @Override
@@ -203,6 +210,19 @@ public class LeadImpl implements LeadUseCases {
         lead.setAssignedAgentId(assignedAgentId);
         lead.setStatus(LeadStatus.PENDING);
         logger.info("Lead {} asignado al agente {}", leadId, assignedAgentId);
+        return toResponse(leadRepo.save(lead));
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse takeLead(Long leadId, Long userId) {
+        var agentEntity = agentRepo.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Agente no encontrado para userId: " + userId));
+        Lead lead = leadRepo.findById(leadId)
+                .orElseThrow(() -> new RuntimeException("Lead no encontrado"));
+        lead.setAssignedAgentId(agentEntity.getId());
+        lead.setStatus(LeadStatus.PENDING);
+        logger.info("Lead {} tomado por agente {} (userId={})", leadId, agentEntity.getId(), userId);
         return toResponse(leadRepo.save(lead));
     }
 

@@ -37,6 +37,10 @@ public interface LeadJpaRepository extends JpaRepository<LeadEntity, Long>,
     @Query("SELECT l FROM LeadEntity l WHERE l.assignedAgentId = :agentId AND l.status IN ('PENDING', 'CALLBACK') ORDER BY l.callbackDate ASC NULLS LAST, l.createdAt ASC")
     List<LeadEntity> findAssignedPendingLeads(@Param("agentId") Long agentId);
 
+    /** Todos los leads activos de un admin (visibilidad pública) */
+    @Query("SELECT l FROM LeadEntity l WHERE l.ownerId = :adminId AND l.status NOT IN ('DISCARDED', 'CONVERTED') ORDER BY l.callbackDate ASC NULLS LAST, l.createdAt ASC")
+    List<LeadEntity> findAllActiveByAdminId(@Param("adminId") Long adminId);
+
     @Query("SELECT COUNT(l) > 0 FROM LeadEntity l WHERE l.contactPhone = :phone AND l.ownerId = :ownerId")
     boolean existsByPhoneAndOwner(@Param("phone") String phone, @Param("ownerId") Long ownerId);
 

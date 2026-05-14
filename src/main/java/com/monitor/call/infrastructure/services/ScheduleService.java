@@ -2,6 +2,7 @@ package com.monitor.call.infrastructure.services;
 
 import com.monitor.call.domain.ports.in.ScheduleUseCases;
 import com.monitor.call.domain.ports.in.SystemConfigUseCases;
+import com.monitor.call.domain.responses.ScheduleWindow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -46,10 +47,7 @@ public class ScheduleService implements ScheduleUseCases {
         this.mapper = mapper;
     }
 
-    /**
-     * Retorna true si el instante dado cae dentro del horario laboral configurado.
-     * Cuando hay error de parsing devuelve true para no bloquear ninguna alerta.
-     */
+    @Override
     public boolean isWithinSchedule(Long adminId, OffsetDateTime now) {
         String raw = configUseCases.getValue(adminId, "agents.schedule");
         if (raw == null || raw.isBlank()) return true;
@@ -66,11 +64,7 @@ public class ScheduleService implements ScheduleUseCases {
         }
     }
 
-    /**
-     * Retorna true si el día de semana dado es un día laboral según la config.
-     * FREE y HOURS_PER_DAY no restringen días → siempre true.
-     * FIXED → solo los días que tengan entrada en days{}.
-     */
+    @Override
     public boolean isWorkDay(Long adminId, DayOfWeek day) {
         String raw = configUseCases.getValue(adminId, "agents.schedule");
         if (raw == null || raw.isBlank()) return true;
@@ -84,38 +78,32 @@ public class ScheduleService implements ScheduleUseCases {
         }
     }
 
-    /**
-     * Retorna la ventana de horario para un día específico.
-     */
+    @Override
     public ScheduleWindow getWindowForDay(Long adminId, LocalDate date) {
         String raw = configUseCases.getValue(adminId, "agents.schedule");
-        if (raw == null || raw.isBlank()) return new ScheduleWindow("FREE", true, null, null);
+        if (raw == null || raw.isBlank()) return ScheduleWindow.free();
         try {
             JsonNode node = mapper.readTree(raw);
             String type = node.path("type").asText("FREE");
             return switch (type) {
-                case "FIXED" -> getWindowForFixed(node, date);
-                case "HOURS_PER_DAY" -> {
-                    LocalTime start = LocalTime.parse(node.path("windowStart").asText("00:00"));
-                    LocalTime end   = LocalTime.parse(node.path("windowEnd").asText("23:59"));
-                    yield new ScheduleWindow("HOURS_PER_DAY", true, start, end);
+                case "FIXED" -> {
+                    String dayKey = DOW_KEY.getOrDefault(date.getDayOfWeek(), "");
+                    JsonNode days = node.path("days");
+                    if (!days.has(dayKey)) yield ScheduleWindow.dayOff();
+                    JsonNode day = days.get(dayKey);
+                    yield ScheduleWindow.fixed(
+                            LocalTime.parse(day.path("start").asText("00:00")),
+                            LocalTime.parse(day.path("end").asText("23:59")));
                 }
-                default -> new ScheduleWindow("FREE", true, null, null);
+                case "HOURS_PER_DAY" -> ScheduleWindow.hoursPerDay(
+                        LocalTime.parse(node.path("windowStart").asText("00:00")),
+                        LocalTime.parse(node.path("windowEnd").asText("23:59")));
+                default -> ScheduleWindow.free();
             };
         } catch (Exception e) {
             log.warn("Error al parsear agents.schedule adminId={}: {}", adminId, e.getMessage());
-            return new ScheduleWindow("FREE", true, null, null);
+            return ScheduleWindow.free();
         }
-    }
-
-    private ScheduleWindow getWindowForFixed(JsonNode node, LocalDate date) {
-        String dayKey = DOW_KEY.getOrDefault(date.getDayOfWeek(), "");
-        JsonNode days = node.path("days");
-        if (!days.has(dayKey)) return new ScheduleWindow("FIXED", false, null, null);
-        JsonNode day = days.get(dayKey);
-        LocalTime start = LocalTime.parse(day.path("start").asText("00:00"));
-        LocalTime end   = LocalTime.parse(day.path("end").asText("23:59"));
-        return new ScheduleWindow("FIXED", true, start, end);
     }
 
     // ── helpers privados ──────────────────────────────────────────────────────
