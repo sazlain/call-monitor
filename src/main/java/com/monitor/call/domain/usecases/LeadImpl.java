@@ -173,8 +173,9 @@ public class LeadImpl implements LeadUseCases {
         boolean isPublic = adminId != null
                 && configUseCases.getBooleanValue(adminId, "leads.visibility");
 
+        // Público: leads sin agente + los propios. Pre-asignados a otro agente quedan ocultos.
         List<Lead> leads = isPublic
-                ? leadRepo.findAllActiveByAdminId(adminId)
+                ? leadRepo.findPublicLeadsForAgent(adminId, agentId)
                 : leadRepo.findAssignedPendingLeads(agentId);
 
         return leads.stream().map(this::toResponse).toList();
