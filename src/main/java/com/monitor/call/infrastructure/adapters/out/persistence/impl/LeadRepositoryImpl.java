@@ -73,6 +73,22 @@ public class LeadRepositoryImpl implements LeadRepositoryPort {
     }
 
     @Override
+    public List<Lead> findAllActiveByPhone(String phone) {
+        // 1. Exact match
+        List<LeadEntity> exact = repo.findActiveByContactPhone(phone);
+        if (!exact.isEmpty()) return exact.stream().map(LeadMapper::entityToDomain).toList();
+
+        // 2. Suffix match — strip non-digits and use last 10 digits
+        String digits = phone.replaceAll("\\D", "");
+        if (digits.length() >= 7) {
+            String suffix = digits.substring(Math.max(0, digits.length() - 10));
+            return repo.findActiveByContactPhoneSuffix(suffix)
+                    .stream().map(LeadMapper::entityToDomain).toList();
+        }
+        return List.of();
+    }
+
+    @Override
     public void updateStatus(Long leadId, LeadStatus status) {
         repo.findById(leadId).ifPresent(lead -> {
             lead.setStatus(status);

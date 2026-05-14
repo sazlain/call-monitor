@@ -1,6 +1,5 @@
 package com.monitor.call.domain.models;
 
-import com.google.gson.Gson;
 import com.monitor.call.domain.enums.CallFlow;
 import com.monitor.call.domain.enums.CallStatus;
 import lombok.AllArgsConstructor;
@@ -31,6 +30,14 @@ public class CallEvent {
 
     @Override
     public String toString() {
-        return new Gson().toJson(this);
+        return "CallEvent{id=" + id
+                + ", callId='" + callId + '\''
+                + ", callerIdNum='" + callerIdNum + '\''
+                + ", callStatus=" + callStatus
+                + ", callFlow=" + callFlow
+                + ", callerExtension='" + callerExtension + '\''
+                + ", calledNumber='" + calledNumber + '\''
+                + ", createdAt=" + createdAt
+                + '}';
     }
 }

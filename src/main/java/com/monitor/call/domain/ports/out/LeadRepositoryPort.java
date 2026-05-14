@@ -19,5 +19,6 @@ public interface LeadRepositoryPort {
     List<Lead> findPendingCallbacks(Long userId, Long agentId);
     List<Object[]> countByStatusForOwner(Long ownerId);
     Optional<Lead> findActiveByPhone(String phone);
+    List<Lead> findAllActiveByPhone(String phone);
     void updateStatus(Long leadId, LeadStatus status);
 }

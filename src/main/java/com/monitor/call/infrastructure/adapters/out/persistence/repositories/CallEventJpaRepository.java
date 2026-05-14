@@ -21,6 +21,7 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
     Optional<CallEventEntity> findTopByCallIdOrderByCreatedAtDesc(String callId);
     List<CallEventEntity> findByCallerExtension(String callerExtension);
 
+
     // ── Bloque 1+2: KPIs de volumen ──────────────────────────────────────────
 
     @Query("SELECT COUNT(DISTINCT e.callId) FROM CallEventEntity e WHERE e.callerExtension = :ext AND e.callStatus = 'CALLING' AND e.createdAt BETWEEN :from AND :to")

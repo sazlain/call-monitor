@@ -6,6 +6,7 @@ import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEn
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentGroupEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentGroupJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.mappers.AgentMapper;
 import org.springframework.stereotype.Component;
 
@@ -17,11 +18,28 @@ public class AgentRepositoryImpl implements AgentRepositoryPort {
 
     private final AgentJpaRepository agentRepo;
     private final AgentGroupJpaRepository groupRepo;
+    private final UserJpaRepository userRepo;
 
-    public AgentRepositoryImpl(AgentJpaRepository agentRepo, AgentGroupJpaRepository groupRepo) {
+    public AgentRepositoryImpl(AgentJpaRepository agentRepo,
+                                AgentGroupJpaRepository groupRepo,
+                                UserJpaRepository userRepo) {
         this.agentRepo = agentRepo;
         this.groupRepo = groupRepo;
+        this.userRepo  = userRepo;
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Convierte entidad a dominio enriqueciendo con el nombre del usuario asociado. */
+    private Agent toModel(AgentEntity e) {
+        Agent agent = AgentMapper.entityToDomain(e);
+        if (e.getUserId() != null) {
+            userRepo.findById(e.getUserId()).ifPresent(u -> agent.setUserName(u.getName()));
+        }
+        return agent;
+    }
+
+    // ── Port implementation ───────────────────────────────────────────────────
 
     @Override
     public Agent save(Agent agent) {
@@ -31,34 +49,34 @@ public class AgentRepositoryImpl implements AgentRepositoryPort {
                     .orElseThrow(() -> new RuntimeException("Grupo no encontrado: " + agent.getGroupId()));
             entity.setGroup(group);
         }
-        return AgentMapper.entityToDomain(agentRepo.save(entity));
+        return toModel(agentRepo.save(entity));
     }
 
     @Override
     public Optional<Agent> findById(Long id) {
-        return agentRepo.findById(id).map(AgentMapper::entityToDomain);
+        return agentRepo.findById(id).map(this::toModel);
     }
 
     @Override
     public Optional<Agent> findByExtension(String extension) {
-        return agentRepo.findByExtension(extension).map(AgentMapper::entityToDomain);
+        return agentRepo.findByExtension(extension).map(this::toModel);
     }
 
     @Override
     public Optional<Agent> findByUserId(Long userId) {
-        return agentRepo.findByUserId(userId).map(AgentMapper::entityToDomain);
+        return agentRepo.findByUserId(userId).map(this::toModel);
     }
 
     @Override
     public List<Agent> findByGroupId(Long groupId) {
         return agentRepo.findByGroupIdAndActiveTrue(groupId).stream()
-                .map(AgentMapper::entityToDomain).toList();
+                .map(this::toModel).toList();
     }
 
     @Override
     public List<Agent> findByAdminId(Long adminId) {
         return agentRepo.findByAdminId(adminId).stream()
-                .map(AgentMapper::entityToDomain).toList();
+                .map(this::toModel).toList();
     }
 
     @Override

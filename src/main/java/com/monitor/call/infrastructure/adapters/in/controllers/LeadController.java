@@ -32,11 +32,11 @@ import java.util.List;
 public class LeadController {
 
     private final LeadUseCases leadUseCases;
-    private final JwtUtil jwtUtil;
+    private final JwtUtil      jwtUtil;
 
     public LeadController(LeadUseCases leadUseCases, JwtUtil jwtUtil) {
         this.leadUseCases = leadUseCases;
-        this.jwtUtil = jwtUtil;
+        this.jwtUtil      = jwtUtil;
     }
 
     @PostMapping
@@ -92,6 +92,13 @@ public class LeadController {
 
         Long userId = jwtUtil.extractUserId(auth.substring(7));
         return ResponseEntity.ok(leadUseCases.listPendingCallbacks(userId));
+    }
+
+    @GetMapping("/by-phone")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_AGENT', 'CALL_AGENT')")
+    @Operation(summary = "Buscar leads activos por número de teléfono (puede retornar varios)")
+    public ResponseEntity<List<LeadResponse>> byPhone(@RequestParam String phone) {
+        return ResponseEntity.ok(leadUseCases.findAllByPhone(phone));
     }
 
     @GetMapping("/{leadId}")
