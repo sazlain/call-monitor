@@ -54,7 +54,8 @@ public class CallEventController {
 
     private OffsetDateTime[] resolveRange(OffsetDateTime from, OffsetDateTime to) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        OffsetDateTime resolvedFrom = from != null ? from : now.toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
+        // Sin filtro de fecha → últimos 30 días por defecto
+        OffsetDateTime resolvedFrom = from != null ? from : now.minusDays(30).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime resolvedTo   = to   != null ? to   : now;
         return new OffsetDateTime[]{resolvedFrom, resolvedTo};
     }
