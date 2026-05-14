@@ -1,86 +1,112 @@
 <!DOCTYPE html>
-<html lang="es">
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Resumen diario de llamadas</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Resumen diario &mdash; Voxio</title>
 </head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F3F4F6;padding:32px 0;">
-    <tr><td align="center">
+<body style="margin:0;padding:0;background-color:#F1F5F9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
 
-      <!-- Card -->
-      <table width="600" cellpadding="0" cellspacing="0" border="0"
-             style="max-width:600px;width:100%;background:#FFFFFF;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.10);">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F5F9;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
 
-        <!-- Header band -->
-        <tr>
-          <td style="background:#4F46E5;padding:28px 32px;">
-            <div style="font-size:36px;line-height:1;margin-bottom:10px;">&#128202;</div>
-            <div style="font-size:22px;font-weight:700;color:#FFFFFF;margin:0;">Resumen diario de llamadas</div>
-            <div style="font-size:14px;color:rgba(255,255,255,0.85);margin-top:6px;">Actividad del d&iacute;a {{date}}.</div>
-          </td>
-        </tr>
+        <!-- ====== Card 600px ====== -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#FFFFFF;">
 
-        <!-- Body -->
-        <tr>
-          <td style="padding:28px 32px;">
+          <!-- Gold top accent bar -->
+          <tr><td style="padding:0;height:4px;background:#C69B3C;font-size:0;line-height:0;">&nbsp;</td></tr>
 
-            <!-- KPI summary row -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-bottom:24px;">
-              <tr>
-                <td style="width:25%;padding:12px;background:#EEF2FF;border-radius:6px;text-align:center;">
-                  <div style="font-size:24px;font-weight:700;color:#4F46E5;">{{totalCalls}}</div>
-                  <div style="font-size:11px;color:#6B7280;margin-top:4px;">Total llamadas</div>
-                </td>
-                <td style="width:4%;">&nbsp;</td>
-                <td style="width:25%;padding:12px;background:#ECFDF5;border-radius:6px;text-align:center;">
-                  <div style="font-size:24px;font-weight:700;color:#059669;">{{totalAnswered}}</div>
-                  <div style="font-size:11px;color:#6B7280;margin-top:4px;">Contestadas</div>
-                </td>
-                <td style="width:4%;">&nbsp;</td>
-                <td style="width:25%;padding:12px;background:#FFF7ED;border-radius:6px;text-align:center;">
-                  <div style="font-size:24px;font-weight:700;color:#D97706;">{{answerRate}}%</div>
-                  <div style="font-size:11px;color:#6B7280;margin-top:4px;">Tasa de respuesta</div>
-                </td>
-                <td style="width:4%;">&nbsp;</td>
-                <td style="width:25%;padding:12px;background:#F0F9FF;border-radius:6px;text-align:center;">
-                  <div style="font-size:24px;font-weight:700;color:#0891B2;">{{durationMinutes}}</div>
-                  <div style="font-size:11px;color:#6B7280;margin-top:4px;">Minutos en llamadas</div>
-                </td>
-              </tr>
-            </table>
+          <!-- Header band -->
+          <tr>
+            <td style="background:#B91C1C;padding:32px 36px;text-align:center;">
+              <div style="font-size:11px;font-weight:700;color:#FFFFFF;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:20px;">VOXIO</div>
+              <div style="font-size:48px;line-height:1;margin-bottom:16px;">&#128202;</div>
+              <div style="font-size:26px;font-weight:700;color:#FFFFFF;margin-bottom:8px;line-height:1.2;">Resumen diario</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.80);line-height:1.5;">Actividad del d&iacute;a <span style="font-weight:700;color:#FFFFFF;" th:text="${date}">01/01/2025</span></div>
+            </td>
+          </tr>
 
-            <!-- Per-agent table -->
-            <p style="font-size:15px;font-weight:700;color:#1F2937;margin:0 0 8px;">Detalle por agente</p>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:16px;font-size:13px;">
-              <thead>
-                <tr style="background:#F3F4F6;">
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;border-radius:4px 0 0 4px;">Agente</th>
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;">Total llamadas</th>
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;border-radius:0 4px 4px 0;">Contestadas</th>
+          <!-- Body -->
+          <tr>
+            <td style="background:#FFFFFF;padding:28px 32px;">
+
+              <!-- KPI stat boxes row -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
+                <tr>
+                  <!-- Total llamadas — Red -->
+                  <td style="width:23%;padding:16px 10px;background:#FEF2F2;border-top:3px solid #B91C1C;text-align:center;vertical-align:top;">
+                    <div style="font-size:28px;font-weight:800;color:#B91C1C;" th:text="${totalCalls}">0</div>
+                    <div style="font-size:11px;color:#6B7280;margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Total llamadas</div>
+                  </td>
+                  <td style="width:2%;font-size:0;">&nbsp;</td>
+                  <!-- Contestadas — Green -->
+                  <td style="width:23%;padding:16px 10px;background:#ECFDF5;border-top:3px solid #059669;text-align:center;vertical-align:top;">
+                    <div style="font-size:28px;font-weight:800;color:#059669;" th:text="${totalAnswered}">0</div>
+                    <div style="font-size:11px;color:#6B7280;margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Contestadas</div>
+                  </td>
+                  <td style="width:2%;font-size:0;">&nbsp;</td>
+                  <!-- Tasa respuesta — Gold -->
+                  <td style="width:23%;padding:16px 10px;background:#FFFBEB;border-top:3px solid #C69B3C;text-align:center;vertical-align:top;">
+                    <div style="font-size:28px;font-weight:800;color:#C69B3C;" th:text="${answerRate}">0%</div>
+                    <div style="font-size:11px;color:#6B7280;margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Tasa respuesta</div>
+                  </td>
+                  <td style="width:2%;font-size:0;">&nbsp;</td>
+                  <!-- Minutos — Navy -->
+                  <td style="width:23%;padding:16px 10px;background:#F1F5F9;border-top:3px solid #1E293B;text-align:center;vertical-align:top;">
+                    <div style="font-size:28px;font-weight:800;color:#1E293B;" th:text="${durationMinutes}">0</div>
+                    <div style="font-size:11px;color:#6B7280;margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Minutos</div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {{tableRows}}
-              </tbody>
-            </table>
+              </table>
 
-          </td>
-        </tr>
+              <!-- Gold divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
+                <tr><td style="padding:0;height:2px;background:#C69B3C;"></td></tr>
+              </table>
 
-        <!-- Footer -->
-        <tr>
-          <td style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:16px 32px;text-align:center;">
-            <p style="margin:0;font-size:12px;color:#9CA3AF;">
-              Voxio &mdash; Sistema de gesti&oacute;n de llamadas<br>
-              Este es un mensaje autom&aacute;tico, no responder.
-            </p>
-          </td>
-        </tr>
+              <!-- Section heading -->
+              <div style="font-size:11px;font-weight:700;color:#1E293B;text-transform:uppercase;letter-spacing:0.10em;margin-bottom:14px;">Detalle por agente</div>
 
-      </table>
-    </td></tr>
+              <!-- Agent data table -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+                <thead>
+                  <tr style="background:#1E293B;">
+                    <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Agente</th>
+                    <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Total</th>
+                    <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Contestadas</th>
+                    <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Tasa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr th:each="row, iterStat : ${rows}" th:style="${iterStat.odd} ? 'background:#FFFFFF;border-bottom:1px solid #F1F5F9;' : 'background:#F8FAFC;border-bottom:1px solid #F1F5F9;'">
+                    <td style="padding:11px 14px;font-size:13px;color:#111827;" th:text="${row['agentName']}">Agente</td>
+                    <td style="padding:11px 14px;font-size:13px;color:#111827;font-weight:600;" th:text="${row['totalCalls']}">0</td>
+                    <td style="padding:11px 14px;font-size:13px;color:#059669;font-weight:600;" th:text="${row['answered']}">0</td>
+                    <td style="padding:11px 14px;font-size:13px;color:#C69B3C;font-weight:700;" th:text="${row['answerRate']}">0%</td>
+                  </tr>
+                </tbody>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#0F172A;padding:20px 32px;text-align:center;">
+              <div style="font-size:13px;font-weight:700;color:#C69B3C;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px;">VOXIO</div>
+              <div style="font-size:11px;color:#64748B;margin-bottom:5px;">Plataforma inteligente de gesti&oacute;n de llamadas</div>
+              <div style="font-size:10px;color:#475569;">Generado el <span th:text="${generatedAt}">2025-01-01 00:00</span></div>
+            </td>
+          </tr>
+
+        </table>
+        <!-- ====== /Card ====== -->
+
+      </td>
+    </tr>
   </table>
+
 </body>
 </html>

@@ -1,59 +1,98 @@
 <!DOCTYPE html>
-<html lang="es">
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agentes inactivos detectados</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Agentes inactivos detectados &mdash; Voxio</title>
 </head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F3F4F6;padding:32px 0;">
-    <tr><td align="center">
+<body style="margin:0;padding:0;background-color:#F1F5F9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
 
-      <!-- Card -->
-      <table width="600" cellpadding="0" cellspacing="0" border="0"
-             style="max-width:600px;width:100%;background:#FFFFFF;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.10);">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F5F9;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
 
-        <!-- Header band -->
-        <tr>
-          <td style="background:#D97706;padding:28px 32px;">
-            <div style="font-size:36px;line-height:1;margin-bottom:10px;">&#9201;</div>
-            <div style="font-size:22px;font-weight:700;color:#FFFFFF;margin:0;">Agentes inactivos detectados</div>
-            <div style="font-size:14px;color:rgba(255,255,255,0.85);margin-top:6px;">Los siguientes agentes no han registrado actividad en el tiempo configurado.</div>
-          </td>
-        </tr>
+        <!-- ====== Card 600px ====== -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#FFFFFF;">
 
-        <!-- Body -->
-        <tr>
-          <td style="padding:28px 32px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:16px 0;">
-              <tr style="border-bottom:1px solid #F3F4F6;">
-                <td style="padding:10px 0;font-size:13px;color:#6B7280;width:40%;">Agentes inactivos</td>
-                <td style="padding:10px 0;font-size:14px;font-weight:600;color:#111827;">{{agentNames}}</td>
-              </tr>
-              <tr style="border-bottom:1px solid #F3F4F6;">
-                <td style="padding:10px 0;font-size:13px;color:#6B7280;width:40%;">Umbral de inactividad</td>
-                <td style="padding:10px 0;font-size:14px;font-weight:600;color:#111827;">{{thresholdMinutes}} minutos</td>
-              </tr>
-              <tr>
-                <td style="padding:10px 0;font-size:13px;color:#6B7280;width:40%;">Hora de verificaci&oacute;n</td>
-                <td style="padding:10px 0;font-size:14px;font-weight:600;color:#111827;">{{timestamp}}</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
+          <!-- Gold top accent bar -->
+          <tr><td style="padding:0;height:4px;background:#C69B3C;font-size:0;line-height:0;">&nbsp;</td></tr>
 
-        <!-- Footer -->
-        <tr>
-          <td style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:16px 32px;text-align:center;">
-            <p style="margin:0;font-size:12px;color:#9CA3AF;">
-              Voxio &mdash; Sistema de gesti&oacute;n de llamadas<br>
-              Este es un mensaje autom&aacute;tico, no responder.
-            </p>
-          </td>
-        </tr>
+          <!-- Header band -->
+          <tr>
+            <td style="background:#B91C1C;padding:32px 36px;text-align:center;">
+              <div style="font-size:11px;font-weight:700;color:#FFFFFF;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:20px;">VOXIO</div>
+              <div style="font-size:48px;line-height:1;margin-bottom:16px;">&#9201;</div>
+              <div style="font-size:26px;font-weight:700;color:#FFFFFF;margin-bottom:8px;line-height:1.2;">Agentes inactivos detectados</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.80);line-height:1.5;">Los siguientes agentes superaron el tiempo de inactividad configurado.</div>
+            </td>
+          </tr>
 
-      </table>
-    </td></tr>
+          <!-- Body -->
+          <tr>
+            <td style="background:#FFFFFF;padding:28px 32px;">
+
+              <!-- Threshold stat box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="background:#FEF2F2;border-top:3px solid #B91C1C;padding:20px 24px;text-align:center;">
+                    <div style="font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Umbral de inactividad</div>
+                    <div style="font-size:32px;font-weight:800;color:#B91C1C;line-height:1;">
+                      M&aacute;s de <span th:text="${thresholdMinutes}">30</span> minutos
+                    </div>
+                    <div style="font-size:12px;color:#6B7280;margin-top:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">sin actividad registrada</div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Gold divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
+                <tr><td style="padding:0;height:2px;background:#C69B3C;"></td></tr>
+              </table>
+
+              <!-- Section label -->
+              <div style="font-size:11px;font-weight:700;color:#1E293B;text-transform:uppercase;letter-spacing:0.10em;margin-bottom:12px;">Agentes afectados</div>
+
+              <!-- Agent names prominent box -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="background:#1E293B;padding:18px 22px;">
+                    <div style="font-size:15px;font-weight:600;color:#FFFFFF;line-height:1.7;" th:text="${agentNames}">Agente 1, Agente 2</div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Gold divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:0;">
+                <tr><td style="padding:0;height:2px;background:#C69B3C;"></td></tr>
+              </table>
+
+              <!-- Timestamp info row -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:0;">
+                <tr>
+                  <td style="padding:12px 0;font-size:12px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;width:38%;border-bottom:1px solid #F3F4F6;vertical-align:top;">Hora de verificaci&oacute;n</td>
+                  <td style="padding:12px 0;font-size:14px;color:#111827;border-bottom:1px solid #F3F4F6;vertical-align:top;" th:text="${timestamp}">2025-01-01 10:00</td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#0F172A;padding:20px 32px;text-align:center;">
+              <div style="font-size:13px;font-weight:700;color:#C69B3C;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px;">VOXIO</div>
+              <div style="font-size:11px;color:#64748B;margin-bottom:5px;">Plataforma inteligente de gesti&oacute;n de llamadas</div>
+              <div style="font-size:10px;color:#475569;">Generado el <span th:text="${generatedAt}">2025-01-01 00:00</span></div>
+            </td>
+          </tr>
+
+        </table>
+        <!-- ====== /Card ====== -->
+
+      </td>
+    </tr>
   </table>
+
 </body>
 </html>

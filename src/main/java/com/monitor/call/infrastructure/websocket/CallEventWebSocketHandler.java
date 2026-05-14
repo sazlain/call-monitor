@@ -44,19 +44,22 @@ public class CallEventWebSocketHandler {
     private final SystemConfigUseCases configUseCases;
     private final EmailService emailService;
     private final UserJpaRepository userRepo;
+    private final EmailTemplates emailTemplates;
 
     public CallEventWebSocketHandler(SimpMessagingTemplate messagingTemplate,
                                      AgentJpaRepository agentJpaRepository,
                                      LeadRepositoryPort leadRepo,
                                      SystemConfigUseCases configUseCases,
                                      EmailService emailService,
-                                     UserJpaRepository userRepo) {
+                                     UserJpaRepository userRepo,
+                                     EmailTemplates emailTemplates) {
         this.messagingTemplate = messagingTemplate;
         this.agentJpaRepository = agentJpaRepository;
         this.leadRepo = leadRepo;
         this.configUseCases = configUseCases;
         this.emailService = emailService;
         this.userRepo = userRepo;
+        this.emailTemplates = emailTemplates;
     }
 
     /**
@@ -176,7 +179,7 @@ public class CallEventWebSocketHandler {
             String agentName = userRepo.findById(agentEntity.getUserId())
                     .map(u -> u.getName()).orElse(callerExtension);
 
-            String html = EmailTemplates.unknownCallAlert(
+            String html = emailTemplates.unknownCallAlert(
                     agentName, callerExtension,
                     callEvent.getCalledNumber(),
                     OffsetDateTime.now().toString());

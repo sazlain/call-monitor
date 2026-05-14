@@ -1,236 +1,178 @@
 package com.monitor.call.infrastructure.services;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Plantillas HTML profesionales para los correos de Voxio.
- * Los archivos HTML se cargan desde src/main/resources/templates/email/
- * y los placeholders {{key}} se sustituyen en tiempo de ejecución.
+ * Utiliza Thymeleaf para procesar las plantillas ubicadas en
+ * src/main/resources/templates/email/
  */
-public final class EmailTemplates {
+@Service
+public class EmailTemplates {
 
-    private EmailTemplates() {}
+    private static final Logger logger = LoggerFactory.getLogger(EmailTemplates.class);
+    private static final DateTimeFormatter GENERATED_AT_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    // ── Template loading ──────────────────────────────────────────────────────
+    private final TemplateEngine templateEngine;
 
-    /**
-     * Loads an HTML template from the classpath at templates/email/{name}.html.
-     * Returns a fallback error string if the resource cannot be loaded.
-     */
-    private static String loadTemplate(String name) {
-        String path = "templates/email/" + name + ".html";
-        try (InputStream is = EmailTemplates.class.getClassLoader().getResourceAsStream(path)) {
-            if (is == null) {
-                return "<p>Error: template not found: " + path + "</p>";
-            }
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "<p>Error loading email template '" + name + "': " + e.getMessage() + "</p>";
-        }
+    public EmailTemplates(TemplateEngine templateEngine) {
+        this.templateEngine = templateEngine;
     }
 
-    /**
-     * Replaces {{key}} placeholders in the template.
-     * Pairs are passed as alternating key, value strings: "key1", "val1", "key2", "val2", ...
-     */
-    private static String fill(String template, String... keyValuePairs) {
-        String result = template;
-        for (int i = 0; i + 1 < keyValuePairs.length; i += 2) {
-            String key = "{{" + keyValuePairs[i] + "}}";
-            String value = keyValuePairs[i + 1] != null ? keyValuePairs[i + 1] : "&mdash;";
-            result = result.replace(key, value);
-        }
-        return result;
-    }
+    // ── Private helper ────────────────────────────────────────────────────────
 
-    // ── Row builders ──────────────────────────────────────────────────────────
-
-    /**
-     * Builds a daily-summary table row.
-     * row: [agentName, totalCalls, answered]
-     * Includes a simple inline percentage bar as a colored span.
-     */
-    private static String summaryRow(String[] row) {
-        String agentName  = row.length > 0 ? row[0] : "";
-        String calls      = row.length > 1 ? row[1] : "0";
-        String answered   = row.length > 2 ? row[2] : "0";
-
-        double pct = 0;
+    private String process(String templateName, Consumer<Context> setup) {
         try {
-            long c = Long.parseLong(calls.trim());
-            long a = Long.parseLong(answered.trim());
-            if (c > 0) pct = (double) a / c * 100.0;
-        } catch (NumberFormatException ignored) {}
-
-        String barColor = pct >= 80 ? "#059669" : (pct >= 50 ? "#D97706" : "#DC2626");
-        int barWidth = (int) Math.round(pct);
-        String bar = "<span style=\"display:inline-block;width:" + barWidth + "px;max-width:80px;"
-                   + "height:8px;background:" + barColor + ";border-radius:4px;\"></span>"
-                   + "<span style=\"font-size:11px;color:#6B7280;margin-left:6px;\">"
-                   + String.format("%.0f%%", pct) + "</span>";
-
-        return "<tr style=\"border-bottom:1px solid #F3F4F6;\">"
-             + "<td style=\"padding:10px 12px;color:#111827;font-weight:600;\">" + agentName + "</td>"
-             + "<td style=\"padding:10px 12px;color:#111827;\">" + calls + "</td>"
-             + "<td style=\"padding:10px 12px;color:#111827;\">" + answered + " " + bar + "</td>"
-             + "</tr>";
-    }
-
-    /**
-     * Builds a goals-not-met table row.
-     * row: [agentName, kpi, period, actual, target, progressPercent]
-     * Progress badge: red < 50%, yellow 50-79%, green >= 80%.
-     */
-    private static String goalRow(String[] row) {
-        String agentName = row.length > 0 ? row[0] : "";
-        String kpi       = row.length > 1 ? row[1] : "";
-        String period    = row.length > 2 ? row[2] : "";
-        String actual    = row.length > 3 ? row[3] : "";
-        String target    = row.length > 4 ? row[4] : "";
-        String progress  = row.length > 5 ? row[5] : "0";
-
-        double pct = 0;
-        try { pct = Double.parseDouble(progress.trim()); } catch (NumberFormatException ignored) {}
-
-        String badgeColor = pct >= 80 ? "#059669" : (pct >= 50 ? "#D97706" : "#DC2626");
-        String badge = "<span style=\"display:inline-block;background:" + badgeColor
-                     + ";color:#FFFFFF;font-size:11px;font-weight:700;padding:2px 8px;"
-                     + "border-radius:10px;\">" + String.format("%.0f%%", pct) + "</span>";
-
-        return "<tr style=\"border-bottom:1px solid #F3F4F6;\">"
-             + "<td style=\"padding:10px 12px;color:#111827;font-weight:600;\">" + agentName + "</td>"
-             + "<td style=\"padding:10px 12px;color:#111827;\">" + kpi + "</td>"
-             + "<td style=\"padding:10px 12px;color:#6B7280;\">" + period + "</td>"
-             + "<td style=\"padding:10px 12px;color:#111827;\">" + actual + "</td>"
-             + "<td style=\"padding:10px 12px;color:#111827;\">" + target + "</td>"
-             + "<td style=\"padding:10px 12px;\">" + badge + "</td>"
-             + "</tr>";
-    }
-
-    /**
-     * Builds a pending-callbacks table row.
-     * row: [contactName, phone, agentName, callbackDate]
-     */
-    private static String callbackRow(String[] row) {
-        String contact  = row.length > 0 ? row[0] : "";
-        String phone    = row.length > 1 ? row[1] : "";
-        String agent    = row.length > 2 ? row[2] : "";
-        String date     = row.length > 3 ? row[3] : "";
-
-        return "<tr style=\"border-bottom:1px solid #F3F4F6;\">"
-             + "<td style=\"padding:10px 12px;color:#111827;font-weight:600;\">" + contact + "</td>"
-             + "<td style=\"padding:10px 12px;color:#111827;\">" + phone + "</td>"
-             + "<td style=\"padding:10px 12px;color:#111827;\">" + agent + "</td>"
-             + "<td style=\"padding:10px 12px;color:#111827;\">" + date + "</td>"
-             + "</tr>";
+            Context ctx = new Context();
+            ctx.setVariable("generatedAt", LocalDateTime.now().format(GENERATED_AT_FMT));
+            setup.accept(ctx);
+            return templateEngine.process("email/" + templateName, ctx);
+        } catch (Exception e) {
+            logger.error("Error al procesar plantilla de correo '{}': {}", templateName, e.getMessage(), e);
+            return "<p>Error al cargar la plantilla de correo.</p>";
+        }
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
      * Nueva cita agendada.
-     * Accent: #059669 (emerald), Icon: 📅
      */
-    public static String newAppointment(String agentName, String contactName, String phone,
-                                        String appointmentDate, String appointmentTime,
-                                        String address, Integer attendees, String notes) {
-        String template = loadTemplate("new-appointment");
-        return fill(template,
-                "agentName",       agentName,
-                "contactName",     contactName,
-                "contactPhone",    phone,
-                "appointmentDate", appointmentDate,
-                "appointmentTime", appointmentTime,
-                "address",         address,
-                "attendees",       attendees != null ? String.valueOf(attendees) : "&mdash;",
-                "notes",           notes);
+    public String newAppointment(String agentName, String contactName, String phone,
+                                 String appointmentDate, String appointmentTime,
+                                 String address, Integer attendees, String notes) {
+        return process("new-appointment", ctx -> {
+            ctx.setVariable("agentName", agentName);
+            ctx.setVariable("contactName", contactName);
+            ctx.setVariable("contactPhone", phone);
+            ctx.setVariable("appointmentDate", appointmentDate);
+            ctx.setVariable("appointmentTime", appointmentTime);
+            ctx.setVariable("address", address);
+            ctx.setVariable("attendees", attendees);
+            ctx.setVariable("notes", notes);
+        });
     }
 
     /**
      * Alerta: llamada a número sin lead.
-     * Accent: #DC2626 (red), Icon: 📵
      */
-    public static String unknownCallAlert(String agentName, String extension,
-                                          String calledNumber, String time) {
-        String template = loadTemplate("unknown-call");
-        return fill(template,
-                "agentName",    agentName,
-                "extension",    extension,
-                "calledNumber", calledNumber,
-                "timestamp",    time);
+    public String unknownCallAlert(String agentName, String extension,
+                                   String calledNumber, String time) {
+        return process("unknown-call", ctx -> {
+            ctx.setVariable("agentName", agentName);
+            ctx.setVariable("extension", extension);
+            ctx.setVariable("calledNumber", calledNumber);
+            ctx.setVariable("timestamp", time);
+        });
     }
 
     /**
      * Alerta: agentes inactivos.
-     * Accent: #D97706 (amber), Icon: ⏱
      */
-    public static String idleAgentsAlert(String agentNames, int thresholdMinutes, String time) {
-        String template = loadTemplate("idle-agents");
-        return fill(template,
-                "agentNames",        agentNames,
-                "thresholdMinutes",  String.valueOf(thresholdMinutes),
-                "timestamp",         time);
+    public String idleAgentsAlert(String agentNames, int thresholdMinutes, String time) {
+        return process("idle-agents", ctx -> {
+            ctx.setVariable("agentNames", agentNames);
+            ctx.setVariable("thresholdMinutes", thresholdMinutes);
+            ctx.setVariable("timestamp", time);
+        });
     }
 
     /**
      * Resumen diario de llamadas.
      * agentRows: each String[] is [agentName, totalCalls, answered]
-     * Accent: #4F46E5 (indigo), Icon: 📊
      */
-    public static String dailySummary(String date, List<String[]> agentRows,
-                                      long totalCalls, long totalAnswered,
-                                      long durationMinutes) {
-        double answerRate = totalCalls > 0 ? (double) totalAnswered / totalCalls * 100.0 : 0.0;
+    public String dailySummary(String date, List<String[]> agentRows,
+                               long totalCalls, long totalAnswered, long durationMinutes) {
+        double rate = totalCalls > 0 ? (double) totalAnswered / totalCalls * 100.0 : 0.0;
+        String answerRate = String.format("%.1f%%", rate);
 
-        StringBuilder rows = new StringBuilder();
+        List<Map<String, String>> rows = new ArrayList<>();
         for (String[] row : agentRows) {
-            rows.append(summaryRow(row));
+            Map<String, String> map = new HashMap<>();
+            map.put("agentName", row.length > 0 ? row[0] : "");
+            String calls   = row.length > 1 ? row[1] : "0";
+            String answered = row.length > 2 ? row[2] : "0";
+            map.put("totalCalls", calls);
+            map.put("answered", answered);
+            double rowRate = 0;
+            try {
+                long c = Long.parseLong(calls.trim());
+                long a = Long.parseLong(answered.trim());
+                if (c > 0) rowRate = (double) a / c * 100.0;
+            } catch (NumberFormatException ignored) {}
+            map.put("answerRate", String.format("%.1f%%", rowRate));
+            rows.add(map);
         }
 
-        String template = loadTemplate("daily-summary");
-        return fill(template,
-                "date",            date,
-                "totalCalls",      String.valueOf(totalCalls),
-                "totalAnswered",   String.valueOf(totalAnswered),
-                "answerRate",      String.format("%.1f", answerRate),
-                "durationMinutes", String.valueOf(durationMinutes),
-                "tableRows",       rows.toString());
+        return process("daily-summary", ctx -> {
+            ctx.setVariable("date", date);
+            ctx.setVariable("rows", rows);
+            ctx.setVariable("totalCalls", totalCalls);
+            ctx.setVariable("totalAnswered", totalAnswered);
+            ctx.setVariable("answerRate", answerRate);
+            ctx.setVariable("durationMinutes", durationMinutes);
+        });
     }
 
     /**
      * Metas no cumplidas.
-     * goalRows: each String[] is [agentName, kpi, period, actual, target, percent]
-     * Accent: #7C3AED (purple), Icon: 🎯
+     * goalRows: each String[] is [agentName, kpi, period, actual, target, progressPercent]
      */
-    public static String goalsNotMet(String date, List<String[]> goalRows) {
-        StringBuilder rows = new StringBuilder();
+    public String goalsNotMet(String date, List<String[]> goalRows) {
+        List<Map<String, String>> rows = new ArrayList<>();
         for (String[] row : goalRows) {
-            rows.append(goalRow(row));
+            Map<String, String> map = new HashMap<>();
+            map.put("agentName", row.length > 0 ? row[0] : "");
+            map.put("kpi",       row.length > 1 ? row[1] : "");
+            map.put("period",    row.length > 2 ? row[2] : "");
+            map.put("actual",    row.length > 3 ? row[3] : "");
+            map.put("target",    row.length > 4 ? row[4] : "");
+            String progress = row.length > 5 ? row[5] : "0";
+            map.put("progress", progress);
+            double pct = 0;
+            try { pct = Double.parseDouble(progress.trim()); } catch (NumberFormatException ignored) {}
+            String badgeColor = pct >= 80 ? "#059669" : (pct >= 50 ? "#D97706" : "#DC2626");
+            map.put("badgeColor", badgeColor);
+            rows.add(map);
         }
 
-        String template = loadTemplate("goals-not-met");
-        return fill(template,
-                "date",      date,
-                "tableRows", rows.toString());
+        return process("goals-not-met", ctx -> {
+            ctx.setVariable("date", date);
+            ctx.setVariable("rows", rows);
+        });
     }
 
     /**
      * Callbacks pendientes.
      * callbackRows: each String[] is [contactName, phone, agentName, callbackDate]
-     * Accent: #0891B2 (cyan), Icon: 📞
      */
-    public static String pendingCallbacks(String date, List<String[]> callbackRows) {
-        StringBuilder rows = new StringBuilder();
+    public String pendingCallbacks(String date, List<String[]> callbackRows) {
+        List<Map<String, String>> rows = new ArrayList<>();
         for (String[] row : callbackRows) {
-            rows.append(callbackRow(row));
+            Map<String, String> map = new HashMap<>();
+            map.put("contactName", row.length > 0 ? row[0] : "");
+            map.put("phone",       row.length > 1 ? row[1] : "");
+            map.put("agentName",   row.length > 2 ? row[2] : "");
+            map.put("date",        row.length > 3 ? row[3] : "");
+            rows.add(map);
         }
 
-        String template = loadTemplate("pending-callbacks");
-        return fill(template,
-                "date",      date,
-                "tableRows", rows.toString());
+        return process("pending-callbacks", ctx -> {
+            ctx.setVariable("date", date);
+            ctx.setVariable("rows", rows);
+        });
     }
 }

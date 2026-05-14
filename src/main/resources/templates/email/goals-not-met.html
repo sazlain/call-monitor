@@ -1,60 +1,92 @@
 <!DOCTYPE html>
-<html lang="es">
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Metas sin cumplir</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Metas sin cumplir &mdash; Voxio</title>
 </head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F3F4F6;padding:32px 0;">
-    <tr><td align="center">
+<body style="margin:0;padding:0;background-color:#F1F5F9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
 
-      <!-- Card -->
-      <table width="600" cellpadding="0" cellspacing="0" border="0"
-             style="max-width:600px;width:100%;background:#FFFFFF;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.10);">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1F5F9;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
 
-        <!-- Header band -->
-        <tr>
-          <td style="background:#7C3AED;padding:28px 32px;">
-            <div style="font-size:36px;line-height:1;margin-bottom:10px;">&#127919;</div>
-            <div style="font-size:22px;font-weight:700;color:#FFFFFF;margin:0;">Metas sin cumplir</div>
-            <div style="font-size:14px;color:rgba(255,255,255,0.85);margin-top:6px;">Los siguientes agentes no alcanzaron sus metas el {{date}}.</div>
-          </td>
-        </tr>
+        <!-- ====== Card 600px ====== -->
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#FFFFFF;">
 
-        <!-- Body -->
-        <tr>
-          <td style="padding:28px 32px;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:16px;font-size:13px;">
-              <thead>
-                <tr style="background:#F3F4F6;">
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;border-radius:4px 0 0 4px;">Agente</th>
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;">KPI</th>
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;">Per&iacute;odo</th>
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;">Actual</th>
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;">Meta</th>
-                  <th style="padding:10px 12px;text-align:left;color:#6B7280;font-weight:600;border-radius:0 4px 4px 0;">Progreso</th>
-                </tr>
-              </thead>
-              <tbody>
-                {{tableRows}}
-              </tbody>
-            </table>
-          </td>
-        </tr>
+          <!-- Gold top accent bar -->
+          <tr><td style="padding:0;height:4px;background:#C69B3C;font-size:0;line-height:0;">&nbsp;</td></tr>
 
-        <!-- Footer -->
-        <tr>
-          <td style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:16px 32px;text-align:center;">
-            <p style="margin:0;font-size:12px;color:#9CA3AF;">
-              Voxio &mdash; Sistema de gesti&oacute;n de llamadas<br>
-              Este es un mensaje autom&aacute;tico, no responder.
-            </p>
-          </td>
-        </tr>
+          <!-- Header band -->
+          <tr>
+            <td style="background:#B91C1C;padding:32px 36px;text-align:center;">
+              <div style="font-size:11px;font-weight:700;color:#FFFFFF;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:20px;">VOXIO</div>
+              <div style="font-size:48px;line-height:1;margin-bottom:16px;">&#127919;</div>
+              <div style="font-size:26px;font-weight:700;color:#FFFFFF;margin-bottom:8px;line-height:1.2;">Metas sin cumplir</div>
+              <div style="font-size:14px;color:rgba(255,255,255,0.80);line-height:1.5;">Revisa el desempe&ntilde;o de tu equipo a continuaci&oacute;n.</div>
+            </td>
+          </tr>
 
-      </table>
-    </td></tr>
+          <!-- Body -->
+          <tr>
+            <td style="background:#FFFFFF;padding:28px 32px;">
+
+              <!-- Intro sentence -->
+              <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">
+                A continuaci&oacute;n se listan los KPIs que no fueron alcanzados durante el per&iacute;odo del
+                <span style="font-weight:700;color:#B91C1C;" th:text="${date}">01/01/2025</span>.
+              </p>
+
+              <!-- Gold divider -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
+                <tr><td style="padding:0;height:2px;background:#C69B3C;"></td></tr>
+              </table>
+
+              <!-- Data table -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+                <thead>
+                  <tr style="background:#1E293B;">
+                    <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Agente</th>
+                    <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">KPI</th>
+                    <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Per&iacute;odo</th>
+                    <th style="padding:11px 14px;text-align:center;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Real</th>
+                    <th style="padding:11px 14px;text-align:center;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Meta</th>
+                    <th style="padding:11px 14px;text-align:center;font-size:11px;font-weight:700;color:#C69B3C;text-transform:uppercase;letter-spacing:0.08em;">Progreso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr th:each="row, iterStat : ${rows}" th:style="${iterStat.odd} ? 'background:#FFFFFF;border-bottom:1px solid #F1F5F9;' : 'background:#F8FAFC;border-bottom:1px solid #F1F5F9;'">
+                    <td style="padding:11px 14px;font-size:13px;color:#111827;font-weight:600;" th:text="${row['agentName']}">Agente</td>
+                    <td style="padding:11px 14px;font-size:13px;color:#374151;" th:text="${row['kpi']}">KPI</td>
+                    <td style="padding:11px 14px;font-size:13px;color:#374151;" th:text="${row['period']}">Per&iacute;odo</td>
+                    <td style="padding:11px 14px;font-size:13px;color:#111827;text-align:center;font-weight:600;" th:text="${row['actual']}">0</td>
+                    <td style="padding:11px 14px;font-size:13px;color:#111827;text-align:center;" th:text="${row['target']}">0</td>
+                    <td style="padding:11px 14px;text-align:center;">
+                      <span th:style="'display:inline-block;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:0.05em;border-radius:3px;background:' + ${row['badgeColor']} + ';color:#FFFFFF;'" th:text="${row['progress']}">0%</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#0F172A;padding:20px 32px;text-align:center;">
+              <div style="font-size:13px;font-weight:700;color:#C69B3C;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px;">VOXIO</div>
+              <div style="font-size:11px;color:#64748B;margin-bottom:5px;">Plataforma inteligente de gesti&oacute;n de llamadas</div>
+              <div style="font-size:10px;color:#475569;">Generado el <span th:text="${generatedAt}">2025-01-01 00:00</span></div>
+            </td>
+          </tr>
+
+        </table>
+        <!-- ====== /Card ====== -->
+
+      </td>
+    </tr>
   </table>
+
 </body>
 </html>
