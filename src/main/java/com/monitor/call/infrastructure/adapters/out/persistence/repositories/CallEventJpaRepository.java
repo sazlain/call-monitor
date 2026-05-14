@@ -136,16 +136,16 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
         LEFT JOIN leads l ON l.id = t.lead_id
         WHERE (:status IS NULL OR e.call_status = :status)
           AND (:extension IS NULL OR e.caller_extension = :extension)
-          AND (:from IS NULL OR e.created_at >= :from)
-          AND (:to IS NULL OR e.created_at <= :to)
+          AND (CAST(:from AS timestamptz) IS NULL OR e.created_at >= CAST(:from AS timestamptz))
+          AND (CAST(:to   AS timestamptz) IS NULL OR e.created_at <= CAST(:to   AS timestamptz))
         ORDER BY e.created_at DESC
         """,
         countQuery = """
         SELECT COUNT(*) FROM call_events e
         WHERE (:status IS NULL OR e.call_status = :status)
           AND (:extension IS NULL OR e.caller_extension = :extension)
-          AND (:from IS NULL OR e.created_at >= :from)
-          AND (:to IS NULL OR e.created_at <= :to)
+          AND (CAST(:from AS timestamptz) IS NULL OR e.created_at >= CAST(:from AS timestamptz))
+          AND (CAST(:to   AS timestamptz) IS NULL OR e.created_at <= CAST(:to   AS timestamptz))
         """,
         nativeQuery = true)
     Page<Object[]> findHistory(
