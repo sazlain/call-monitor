@@ -8,9 +8,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
 
@@ -30,15 +30,50 @@ public class DataInitializer implements ApplicationRunner {
 
     private final UserJpaRepository userRepo;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbc;
 
-    public DataInitializer(UserJpaRepository userRepo, PasswordEncoder passwordEncoder) {
+    public DataInitializer(UserJpaRepository userRepo, PasswordEncoder passwordEncoder,
+                           JdbcTemplate jdbc) {
         this.userRepo = userRepo;
         this.passwordEncoder = passwordEncoder;
+        this.jdbc = jdbc;
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
+        migrateUserRolesConstraint();
+        seedSuperAdmin();
+    }
+
+    /**
+     * Actualiza el CHECK constraint de user_roles para incluir SUPER_ADMIN.
+     * Se ejecuta siempre pero solo modifica la BD si el constraint aún no lo contempla.
+     */
+    private void migrateUserRolesConstraint() {
+        try {
+            jdbc.execute("""
+                DO $$
+                BEGIN
+                  IF EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'user_roles_role_check'
+                      AND pg_get_constraintdef(oid) NOT LIKE '%SUPER_ADMIN%'
+                  ) THEN
+                    ALTER TABLE user_roles DROP CONSTRAINT user_roles_role_check;
+                    ALTER TABLE user_roles ADD CONSTRAINT user_roles_role_check
+                      CHECK (role IN ('ADMIN','SALES_AGENT','CALL_AGENT','SUPER_ADMIN'));
+                    RAISE NOTICE 'Constraint user_roles_role_check actualizado con SUPER_ADMIN';
+                  END IF;
+                END
+                $$;
+                """);
+            logger.info("Constraint user_roles_role_check verificado/actualizado");
+        } catch (Exception e) {
+            logger.warn("No se pudo actualizar el constraint user_roles_role_check: {}", e.getMessage());
+        }
+    }
+
+    private void seedSuperAdmin() {
         if (superAdminEmail == null || superAdminEmail.isBlank()) {
             logger.info("SUPER_ADMIN_EMAIL no configurado — omitiendo creación del super admin");
             return;
