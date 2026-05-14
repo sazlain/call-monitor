@@ -36,6 +36,7 @@ public class AppointmentImpl implements AppointmentUseCases {
     private final LeadUseCases             leadUseCases;
     private final SystemConfigUseCases     configUseCases;
     private final EmailService             emailService;
+    private final EmailTemplates           emailTemplates;
 
     public AppointmentImpl(AppointmentJpaRepository appointmentRepo,
                            LeadJpaRepository leadRepo,
@@ -43,7 +44,8 @@ public class AppointmentImpl implements AppointmentUseCases {
                            UserJpaRepository userRepo,
                            LeadUseCases leadUseCases,
                            SystemConfigUseCases configUseCases,
-                           EmailService emailService) {
+                           EmailService emailService,
+                           EmailTemplates emailTemplates) {
         this.appointmentRepo = appointmentRepo;
         this.leadRepo        = leadRepo;
         this.agentRepo       = agentRepo;
@@ -51,6 +53,7 @@ public class AppointmentImpl implements AppointmentUseCases {
         this.leadUseCases    = leadUseCases;
         this.configUseCases  = configUseCases;
         this.emailService    = emailService;
+        this.emailTemplates  = emailTemplates;
     }
 
     @Override
@@ -259,7 +262,7 @@ public class AppointmentImpl implements AppointmentUseCases {
             LeadEntity lead = appt.getLeadId() != null
                     ? leadRepo.findById(appt.getLeadId()).orElse(null) : null;
 
-            String html = EmailTemplates.newAppointment(
+            String html = emailTemplates.newAppointment(
                     agentName,
                     lead != null ? lead.getContactName() : null,
                     lead != null ? lead.getContactPhone() : null,
