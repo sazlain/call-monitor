@@ -11,6 +11,7 @@ public interface CallTypificationRepositoryPort {
     boolean existsByCallId(String callId);
     List<CallTypification> findByAgentId(Long agentId);
     List<CallTypification> findByLeadId(Long leadId);
+    List<CallTypification> findByContactPhoneAndNoLead(String contactPhone);
     List<CallTypification> findByAgentAndPeriod(Long agentId, OffsetDateTime from, OffsetDateTime to);
     List<Object[]> countByResultForAgent(Long agentId, OffsetDateTime from, OffsetDateTime to);
     List<String> findUntypifiedCallIds(Long adminId, OffsetDateTime from, OffsetDateTime to);

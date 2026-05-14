@@ -30,6 +30,9 @@ public class CallTypificationRepositoryImpl implements CallTypificationRepositor
     @Override public List<CallTypification> findByLeadId(Long leadId) {
         return repo.findByLeadId(leadId).stream().map(LeadMapper::typEntityToDomain).toList();
     }
+    @Override public List<CallTypification> findByContactPhoneAndNoLead(String contactPhone) {
+        return repo.findByContactPhoneAndLeadIdIsNull(contactPhone).stream().map(LeadMapper::typEntityToDomain).toList();
+    }
     @Override public List<CallTypification> findByAgentAndPeriod(Long agentId, OffsetDateTime from, OffsetDateTime to) {
         return repo.findByAgentAndPeriod(agentId, from, to).stream().map(LeadMapper::typEntityToDomain).toList();
     }

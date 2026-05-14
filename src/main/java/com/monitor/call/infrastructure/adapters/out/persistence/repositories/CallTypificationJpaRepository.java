@@ -16,6 +16,7 @@ public interface CallTypificationJpaRepository extends JpaRepository<CallTypific
     boolean existsByCallId(String callId);
     List<CallTypificationEntity> findByAgentId(Long agentId);
     List<CallTypificationEntity> findByLeadId(Long leadId);
+    List<CallTypificationEntity> findByContactPhoneAndLeadIdIsNull(String contactPhone);
 
     @Query("SELECT t FROM CallTypificationEntity t WHERE t.agentId = :agentId AND t.createdAt BETWEEN :from AND :to ORDER BY t.createdAt DESC")
     List<CallTypificationEntity> findByAgentAndPeriod(@Param("agentId") Long agentId, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
