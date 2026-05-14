@@ -82,11 +82,28 @@ public class AppointmentImpl implements AppointmentUseCases {
         return toResponse(saved);
     }
 
+    /**
+     * Lanza excepción si la cita indicada NO es la más reciente del lead.
+     * Solo la última cita (mayor ID) puede modificarse.
+     */
+    private void assertIsLastAppointment(Long leadId, Long appointmentId) {
+        if (leadId == null) return;
+        boolean isLast = appointmentRepo.findByLeadId(leadId).stream()
+                .mapToLong(a -> a.getId())
+                .max()
+                .orElse(appointmentId) == appointmentId;
+        if (!isLast) {
+            throw new IllegalStateException(
+                "Solo la cita más reciente del lead puede modificarse.");
+        }
+    }
+
     @Override
     @Transactional
     public AppointmentResponse reschedule(Long appointmentId, AppointmentRequest request) {
         AppointmentEntity existing = appointmentRepo.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Cita no encontrada: " + appointmentId));
+        assertIsLastAppointment(existing.getLeadId(), appointmentId);
 
         // Marcar la anterior como reagendada
         existing.setStatus(AppointmentStatus.RESCHEDULED);
@@ -121,6 +138,7 @@ public class AppointmentImpl implements AppointmentUseCases {
     public AppointmentResponse cancel(Long appointmentId, String reason) {
         AppointmentEntity entity = appointmentRepo.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Cita no encontrada: " + appointmentId));
+        assertIsLastAppointment(entity.getLeadId(), appointmentId);
 
         entity.setStatus(AppointmentStatus.CANCELLED);
         if (reason != null) entity.setNotes(
@@ -128,8 +146,8 @@ public class AppointmentImpl implements AppointmentUseCases {
         );
         appointmentRepo.save(entity);
 
-        // Lead vuelve a INTERESTED
-        leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.INTERESTED, null);
+        // Lead hereda el estado CANCELLED de la cita
+        leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.CANCELLED, null);
         logger.info("Cita cancelada: appointmentId={} leadId={}", appointmentId, entity.getLeadId());
 
         return toResponse(entity);
@@ -140,6 +158,7 @@ public class AppointmentImpl implements AppointmentUseCases {
     public AppointmentResponse confirm(Long appointmentId) {
         AppointmentEntity entity = appointmentRepo.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Cita no encontrada: " + appointmentId));
+        assertIsLastAppointment(entity.getLeadId(), appointmentId);
 
         entity.setStatus(AppointmentStatus.CONFIRMED);
         appointmentRepo.save(entity);
@@ -172,6 +191,23 @@ public class AppointmentImpl implements AppointmentUseCases {
     public List<AppointmentResponse> listByLead(Long leadId) {
         return appointmentRepo.findByLeadId(leadId)
                 .stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    @Transactional
+    public void cancelLatestByLeadId(Long leadId) {
+        if (leadId == null) return;
+        appointmentRepo.findByLeadId(leadId).stream()
+                .max(java.util.Comparator.comparingLong(AppointmentEntity::getId))
+                .ifPresent(entity -> {
+                    if (entity.getStatus() != AppointmentStatus.CANCELLED
+                            && entity.getStatus() != AppointmentStatus.ATTENDED) {
+                        entity.setStatus(AppointmentStatus.CANCELLED);
+                        appointmentRepo.save(entity);
+                        logger.info("Cita {} cancelada automáticamente por tipificación APPOINTMENT_CANCEL (leadId={})",
+                                entity.getId(), leadId);
+                    }
+                });
     }
 
     private AppointmentResponse toResponse(AppointmentEntity e) {
@@ -240,19 +276,57 @@ public class AppointmentImpl implements AppointmentUseCases {
     }
 
     @Override
+    public AppointmentResponse findById(Long appointmentId) {
+        AppointmentEntity entity = appointmentRepo.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Cita no encontrada: " + appointmentId));
+        return toResponse(entity);
+    }
+
+    @Override
+    @Transactional
+    public AppointmentResponse markRescheduled(Long appointmentId) {
+        AppointmentEntity entity = appointmentRepo.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Cita no encontrada: " + appointmentId));
+        assertIsLastAppointment(entity.getLeadId(), appointmentId);
+        entity.setStatus(AppointmentStatus.RESCHEDULED);
+        appointmentRepo.save(entity);
+        if (entity.getLeadId() != null) {
+            leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.APPOINTMENT_RESCHEDULED, null);
+        }
+        logger.info("Cita marcada como reagendada: appointmentId={} leadId={}", appointmentId, entity.getLeadId());
+        return toResponse(entity);
+    }
+
+    @Override
+    @Transactional
+    public AppointmentResponse reactivate(Long appointmentId) {
+        AppointmentEntity entity = appointmentRepo.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Cita no encontrada: " + appointmentId));
+        assertIsLastAppointment(entity.getLeadId(), appointmentId);
+        entity.setStatus(AppointmentStatus.SCHEDULED);
+        appointmentRepo.save(entity);
+        if (entity.getLeadId() != null) {
+            leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.APPOINTMENT, null);
+        }
+        logger.info("Cita reactivada a SCHEDULED: appointmentId={} leadId={}", appointmentId, entity.getLeadId());
+        return toResponse(entity);
+    }
+
+    @Override
     @Transactional
     public AppointmentResponse attend(Long appointmentId) {
         AppointmentEntity entity = appointmentRepo.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Cita no encontrada: " + appointmentId));
+        assertIsLastAppointment(entity.getLeadId(), appointmentId);
 
         entity.setStatus(AppointmentStatus.ATTENDED);
         appointmentRepo.save(entity);
 
-        // Lead se mantiene en APPOINTMENT (agendada) — la conversión es un evento separado
+        // Lead pasa a ATTENDED — la visita fue realizada
         if (entity.getLeadId() != null) {
-            leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.APPOINTMENT, null);
+            leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.ATTENDED, null);
         }
-        logger.info("Cita atendida: appointmentId={} leadId={} -> APPOINTMENT",
+        logger.info("Cita atendida: appointmentId={} leadId={} -> ATTENDED",
                 appointmentId, entity.getLeadId());
 
         return toResponse(entity);

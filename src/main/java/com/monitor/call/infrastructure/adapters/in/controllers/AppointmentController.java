@@ -98,10 +98,31 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentUseCases.listByLead(leadId));
     }
 
+    @Operation(summary = "Obtener cita por ID")
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','CALL_AGENT')")
+    public ResponseEntity<AppointmentResponse> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(appointmentUseCases.findById(id));
+    }
+
     @Operation(summary = "Marcar cita como atendida — estado final exitoso")
     @PutMapping("/{id}/attend")
     @PreAuthorize("hasAnyRole('ADMIN','CALL_AGENT')")
     public ResponseEntity<AppointmentResponse> attend(@PathVariable Long id) {
         return ResponseEntity.ok(appointmentUseCases.attend(id));
+    }
+
+    @Operation(summary = "Marcar cita como reagendada sin crear nueva cita")
+    @PutMapping("/{id}/mark-rescheduled")
+    @PreAuthorize("hasAnyRole('ADMIN','CALL_AGENT')")
+    public ResponseEntity<AppointmentResponse> markRescheduled(@PathVariable Long id) {
+        return ResponseEntity.ok(appointmentUseCases.markRescheduled(id));
+    }
+
+    @Operation(summary = "Reactivar cita reagendada — vuelve a SCHEDULED")
+    @PutMapping("/{id}/reactivate")
+    @PreAuthorize("hasAnyRole('ADMIN','CALL_AGENT')")
+    public ResponseEntity<AppointmentResponse> reactivate(@PathVariable Long id) {
+        return ResponseEntity.ok(appointmentUseCases.reactivate(id));
     }
 }

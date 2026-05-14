@@ -19,4 +19,5 @@ public interface LeadUseCases {
     LeadResponse takeLead(Long leadId, Long userId);
     void discardLead(Long leadId, Long requesterId);
     LeadResponse updateLeadStatus(Long leadId, LeadStatus status, LocalDate callbackDate);
+    List<LeadResponse> findAllByPhone(String phone);
 }

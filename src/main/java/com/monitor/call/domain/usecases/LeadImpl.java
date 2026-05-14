@@ -232,12 +232,21 @@ public class LeadImpl implements LeadUseCases {
     public void discardLead(Long leadId, Long requesterId) {
         Lead lead = leadRepo.findById(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead no encontrado"));
+        if (lead.getStatus() == LeadStatus.APPOINTMENT || lead.getStatus() == LeadStatus.APPOINTMENT_RESCHEDULED) {
+            throw new IllegalStateException(
+                "El lead tiene una cita activa. Cancela la cita para descartarlo.");
+        }
         lead.setStatus(LeadStatus.DISCARDED);
         leadRepo.save(lead);
     }
 
     @Override
     @Transactional
+    public List<LeadResponse> findAllByPhone(String phone) {
+        if (phone == null || phone.isBlank()) return List.of();
+        return leadRepo.findAllActiveByPhone(phone).stream().map(this::toResponse).toList();
+    }
+
     public LeadResponse updateLeadStatus(Long leadId, LeadStatus status, LocalDate callbackDate) {
         Lead lead = leadRepo.findById(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead no encontrado"));

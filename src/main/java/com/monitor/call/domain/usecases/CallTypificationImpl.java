@@ -3,6 +3,7 @@ package com.monitor.call.domain.usecases;
 import com.monitor.call.domain.enums.CallResult;
 import com.monitor.call.domain.enums.LeadStatus;
 import com.monitor.call.domain.models.CallTypification;
+import com.monitor.call.domain.ports.in.AppointmentUseCases;
 import com.monitor.call.domain.ports.in.CallTypificationUseCases;
 import com.monitor.call.domain.ports.in.LeadUseCases;
 import com.monitor.call.domain.ports.out.CallTypificationRepositoryPort;
@@ -16,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -25,15 +27,18 @@ public class CallTypificationImpl implements CallTypificationUseCases {
 
     private final CallTypificationRepositoryPort typRepo;
     private final LeadUseCases leadUseCases;
+    private final AppointmentUseCases appointmentUseCases;
     private final UserJpaRepository userRepo;
     private final AgentJpaRepository agentRepo;
 
     public CallTypificationImpl(CallTypificationRepositoryPort typRepo,
                                 LeadUseCases leadUseCases,
+                                AppointmentUseCases appointmentUseCases,
                                 UserJpaRepository userRepo,
                                 AgentJpaRepository agentRepo) {
         this.typRepo = typRepo;
         this.leadUseCases = leadUseCases;
+        this.appointmentUseCases = appointmentUseCases;
         this.userRepo = userRepo;
         this.agentRepo = agentRepo;
     }
@@ -107,7 +112,15 @@ public class CallTypificationImpl implements CallTypificationUseCases {
 
     @Override
     public List<CallTypificationResponse> listByLead(Long leadId) {
-        return typRepo.findByLeadId(leadId).stream().map(this::toResponse).toList();
+        // Solo tipificaciones que tienen el leadId exacto.
+        // El fallback por teléfono se eliminó porque cuando dos leads comparten
+        // el mismo número los registros huérfanos (leadId IS NULL) son ambiguos
+        // y contaminan el historial de ambos leads.
+        return typRepo.findByLeadId(leadId).stream()
+                .sorted(Comparator.comparing(CallTypification::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(this::toResponse)
+                .toList();
     }
 
     /**
@@ -120,18 +133,29 @@ public class CallTypificationImpl implements CallTypificationUseCases {
             case INTERESTED                            -> LeadStatus.INTERESTED;
             case CALLBACK                              -> LeadStatus.CALLBACK;
             case APPOINTMENT, APPOINTMENT_RESCHEDULE   -> LeadStatus.APPOINTMENT;
-            case APPOINTMENT_CANCEL                    -> LeadStatus.INTERESTED;
+            case APPOINTMENT_CANCEL                    -> LeadStatus.CANCELLED;
             case NOT_INTERESTED, WRONG_NUMBER          -> LeadStatus.DISCARDED;
             case NO_ANSWER, VOICEMAIL, OTHER           -> LeadStatus.CONTACTED;
         };
         leadUseCases.updateLeadStatus(leadId, newStatus, callbackDate);
         logger.info("Lead {} actualizado a {} por resultado {}", leadId, newStatus, result);
+
+        // Cancelar la cita activa cuando el agente registra APPOINTMENT_CANCEL
+        if (result == CallResult.APPOINTMENT_CANCEL) {
+            appointmentUseCases.cancelLatestByLeadId(leadId);
+        }
     }
 
     private CallTypificationResponse toResponse(CallTypification t) {
+        // El campo agentId puede contener tanto el agentEntity.id como el userId,
+        // dependiendo de quién tipificó. Intentamos ambas rutas.
         String agentName = agentRepo.findById(t.getAgentId())
                 .flatMap(a -> userRepo.findById(a.getUserId()))
-                .map(u -> u.getName()).orElse("Desconocido");
+                .map(u -> u.getName())
+                // Fallback: el valor guardado es directamente el userId
+                .orElseGet(() -> userRepo.findById(t.getAgentId())
+                        .map(u -> u.getName())
+                        .orElse("Desconocido"));
         return LeadMapper.typDomainToResponse(t, agentName);
     }
 }
