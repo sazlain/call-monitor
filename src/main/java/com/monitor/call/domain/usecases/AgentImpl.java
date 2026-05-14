@@ -7,6 +7,8 @@ import com.monitor.call.domain.ports.in.AgentUseCases;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
 import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.AgentResponse;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.LicenseEntity;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LicenseJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.mappers.AgentMapper;
 import org.slf4j.Logger;
@@ -30,13 +32,16 @@ public class AgentImpl implements AgentUseCases {
     private final UserRepositoryPort userRepo;
     private final UserJpaRepository userJpaRepo;
     private final PasswordEncoder passwordEncoder;
+    private final LicenseJpaRepository licenseRepo;
 
     public AgentImpl(AgentRepositoryPort agentRepo, UserRepositoryPort userRepo,
-                     UserJpaRepository userJpaRepo, PasswordEncoder passwordEncoder) {
+                     UserJpaRepository userJpaRepo, PasswordEncoder passwordEncoder,
+                     LicenseJpaRepository licenseRepo) {
         this.agentRepo = agentRepo;
         this.userRepo = userRepo;
         this.userJpaRepo = userJpaRepo;
         this.passwordEncoder = passwordEncoder;
+        this.licenseRepo = licenseRepo;
     }
 
     @Override
@@ -47,6 +52,17 @@ public class AgentImpl implements AgentUseCases {
             throw new RuntimeException("El email ya esta registrado");
         if (agentRepo.existsByExtension(extension))
             throw new RuntimeException("La extension ya esta registrada");
+
+        // Verificar límite de agentes según licencia
+        if (adminId != null) {
+            LicenseEntity license = licenseRepo.findByAdminId(adminId).orElse(null);
+            if (license != null) {
+                int current = agentRepo.findByAdminId(adminId).size();
+                if (current >= license.getMaxAgents()) {
+                    throw new RuntimeException("AGENT_LIMIT_REACHED: límite de " + license.getMaxAgents() + " agentes alcanzado para este plan");
+                }
+            }
+        }
 
         // 1. Crear usuario con contrasena temporal y roles CALL_AGENT
         String tempPassword = UUID.randomUUID().toString().substring(0, 10);

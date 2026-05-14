@@ -1,5 +1,6 @@
 package com.monitor.call.domain.usecases;
 
+import com.monitor.call.domain.enums.LicenseStatus;
 import com.monitor.call.domain.enums.Role;
 import com.monitor.call.domain.models.User;
 import com.monitor.call.domain.ports.in.AuthUseCases;
@@ -7,7 +8,10 @@ import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.LoginResponse;
 import com.monitor.call.domain.responses.UserResponse;
 import com.monitor.call.exceptions.SupportMessages;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.LicenseEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LicenseJpaRepository;
 import com.monitor.call.infrastructure.mappers.UserMapper;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.slf4j.Logger;
@@ -30,17 +34,20 @@ public class AuthImpl implements AuthUseCases {
     private final SupportMessages supportMessages;
 
     private final AgentJpaRepository agentJpaRepository;
+    private final LicenseJpaRepository licenseRepo;
 
     public AuthImpl(UserRepositoryPort userRepo,
                     PasswordEncoder passwordEncoder,
                     JwtUtil jwtUtil,
                     SupportMessages supportMessages,
-                    AgentJpaRepository agentJpaRepository) {
+                    AgentJpaRepository agentJpaRepository,
+                    LicenseJpaRepository licenseRepo) {
         this.userRepo = userRepo;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.supportMessages = supportMessages;
         this.agentJpaRepository = agentJpaRepository;
+        this.licenseRepo = licenseRepo;
     }
 
     @Override
@@ -51,6 +58,11 @@ public class AuthImpl implements AuthUseCases {
 
         if (!passwordEncoder.matches(password, user.getPassword()))
             throw new RuntimeException("Credenciales invalidas");
+
+        // Validar licencia (SUPER_ADMIN siempre tiene acceso)
+        if (!user.getRoles().contains(Role.SUPER_ADMIN)) {
+            validateLicense(user);
+        }
 
         // Buscar extension del agente si el usuario tiene rol CALL_AGENT o SALES_AGENT
         String extension = agentJpaRepository.findByUserId(user.getId())
@@ -67,6 +79,34 @@ public class AuthImpl implements AuthUseCases {
                 .roles(user.getRoles()).extension(extension)
                 .mustChangePassword(user.getMustChangePassword())
                 .build();
+    }
+
+    private void validateLicense(User user) {
+        Long adminId = null;
+
+        if (user.getRoles().contains(Role.ADMIN)) {
+            adminId = user.getId();
+        } else {
+            // Para agentes, obtener adminId desde su grupo
+            AgentEntity agent = agentJpaRepository.findByUserId(user.getId()).orElse(null);
+            if (agent != null && agent.getGroup() != null) {
+                adminId = agent.getGroup().getAdminId();
+            }
+        }
+
+        if (adminId == null) return; // sin grupo/admin configurado, permitir
+
+        LicenseEntity license = licenseRepo.findByAdminId(adminId).orElse(null);
+        if (license == null) return; // sin licencia configurada, permitir (período de gracia)
+
+        if (license.getStatus() == LicenseStatus.EXPIRED) {
+            logger.warn("Acceso bloqueado: licencia EXPIRED para adminId={}", adminId);
+            throw new RuntimeException("LICENSE_EXPIRED");
+        }
+        if (license.getStatus() == LicenseStatus.SUSPENDED) {
+            logger.warn("Acceso bloqueado: licencia SUSPENDED para adminId={}", adminId);
+            throw new RuntimeException("LICENSE_SUSPENDED");
+        }
     }
 
     @Override
