@@ -12,6 +12,7 @@ import com.monitor.call.domain.ports.out.DashboardRepositoryPort;
 import com.monitor.call.domain.ports.out.LeadRepositoryPort;
 import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.AgentGoalHistoryResponse;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.PushSubscriptionJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -38,7 +39,10 @@ public class ScheduledAlertService {
     private final SystemConfigUseCases configUseCases;
     private final AgentGoalUseCases goalUseCases;
     private final EmailService emailService;
+    private final EmailTemplates emailTemplates;
     private final ScheduleUseCases scheduleService;
+    private final PushNotificationService pushService;
+    private final PushSubscriptionJpaRepository pushRepo;
 
     public ScheduledAlertService(UserRepositoryPort userRepo,
                                   AgentRepositoryPort agentRepo,
@@ -47,7 +51,10 @@ public class ScheduledAlertService {
                                   SystemConfigUseCases configUseCases,
                                   AgentGoalUseCases goalUseCases,
                                   EmailService emailService,
-                                  ScheduleUseCases scheduleService) {
+                                  EmailTemplates emailTemplates,
+                                  ScheduleUseCases scheduleService,
+                                  PushNotificationService pushService,
+                                  PushSubscriptionJpaRepository pushRepo) {
         this.userRepo = userRepo;
         this.agentRepo = agentRepo;
         this.dashboardRepo = dashboardRepo;
@@ -55,7 +62,10 @@ public class ScheduledAlertService {
         this.configUseCases = configUseCases;
         this.goalUseCases = goalUseCases;
         this.emailService = emailService;
+        this.emailTemplates = emailTemplates;
         this.scheduleService = scheduleService;
+        this.pushService = pushService;
+        this.pushRepo = pushRepo;
     }
 
     // ── 1. Inactividad de agentes — cada 5 minutos ─────────────────────────────
@@ -84,11 +94,15 @@ public class ScheduledAlertService {
                         .map(a -> a.getUserName() != null ? a.getUserName() : a.getExtension())
                         .reduce((a, b) -> a + ", " + b).orElse(String.join(", ", idleExts));
 
-                String html = EmailTemplates.idleAgentsAlert(
+                String html = emailTemplates.idleAgentsAlert(
                         agentNames, threshold, OffsetDateTime.now().toString());
 
                 emailService.send(admin.getEmail(),
                         "Alerta: agentes inactivos (" + idleExts.size() + ")", html);
+                pushService.sendToAll(pushRepo.findByUserId(admin.getId()),
+                        "Agentes inactivos (" + idleExts.size() + ")",
+                        agentNames + " sin actividad por " + threshold + " min",
+                        "/pwa-192x192.png", "/dashboard");
                 logger.info("Alerta de inactividad enviada a admin={} agentes={}", admin.getId(), idleExts.size());
             }
         }
@@ -134,7 +148,7 @@ public class ScheduledAlertService {
             long durationMinutes = totalDuration != null ? (long) (totalDuration / 60) : 0;
             String date = LocalDate.now().toString();
 
-            String html = EmailTemplates.dailySummary(date, agentRows, totalCalls, totalAnswered, durationMinutes);
+            String html = emailTemplates.dailySummary(date, agentRows, totalCalls, totalAnswered, durationMinutes);
 
             emailService.send(admin.getEmail(), "Resumen diario — Voxio", html);
             logger.info("Resumen diario enviado a admin={}", admin.getId());
@@ -178,7 +192,7 @@ public class ScheduledAlertService {
             }
 
             String goalDate = LocalDate.now().toString();
-            String html = EmailTemplates.goalsNotMet(goalDate, goalRows);
+            String html = emailTemplates.goalsNotMet(goalDate, goalRows);
 
             emailService.send(admin.getEmail(),
                     "Alerta: " + adminUnmet.size() + " metas sin cumplir", html);
@@ -220,10 +234,14 @@ public class ScheduledAlertService {
             }
 
             String cbDateStr = LocalDate.now().toString();
-            String html = EmailTemplates.pendingCallbacks(cbDateStr, callbackRows);
+            String html = emailTemplates.pendingCallbacks(cbDateStr, callbackRows);
 
             emailService.send(admin.getEmail(),
                     "Callbacks pendientes: " + callbacks.size(), html);
+            pushService.sendToAll(pushRepo.findByUserId(admin.getId()),
+                    "Callbacks pendientes: " + callbacks.size(),
+                    "Hay leads esperando ser contactados hoy",
+                    "/pwa-192x192.png", "/leads");
             logger.info("Recordatorio callbacks enviado a admin={} cantidad={}", admin.getId(), callbacks.size());
         }
     }

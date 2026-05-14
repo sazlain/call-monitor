@@ -10,8 +10,10 @@ import com.monitor.call.domain.responses.CallEventWebSocketMessage;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.PushSubscriptionJpaRepository;
 import com.monitor.call.infrastructure.services.EmailService;
 import com.monitor.call.infrastructure.services.EmailTemplates;
+import com.monitor.call.infrastructure.services.PushNotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -45,6 +47,8 @@ public class CallEventWebSocketHandler {
     private final EmailService emailService;
     private final UserJpaRepository userRepo;
     private final EmailTemplates emailTemplates;
+    private final PushNotificationService pushService;
+    private final PushSubscriptionJpaRepository pushRepo;
 
     public CallEventWebSocketHandler(SimpMessagingTemplate messagingTemplate,
                                      AgentJpaRepository agentJpaRepository,
@@ -52,7 +56,9 @@ public class CallEventWebSocketHandler {
                                      SystemConfigUseCases configUseCases,
                                      EmailService emailService,
                                      UserJpaRepository userRepo,
-                                     EmailTemplates emailTemplates) {
+                                     EmailTemplates emailTemplates,
+                                     PushNotificationService pushService,
+                                     PushSubscriptionJpaRepository pushRepo) {
         this.messagingTemplate = messagingTemplate;
         this.agentJpaRepository = agentJpaRepository;
         this.leadRepo = leadRepo;
@@ -60,6 +66,8 @@ public class CallEventWebSocketHandler {
         this.emailService = emailService;
         this.userRepo = userRepo;
         this.emailTemplates = emailTemplates;
+        this.pushService = pushService;
+        this.pushRepo = pushRepo;
     }
 
     /**
@@ -185,6 +193,10 @@ public class CallEventWebSocketHandler {
                     OffsetDateTime.now().toString());
 
             emailService.send(adminEmail, "Alerta: llamada a número sin lead", html);
+            pushService.sendToAll(pushRepo.findByUserId(resolvedAdminId),
+                    "Llamada sin lead",
+                    "Ext " + callerExtension + " marcó " + callEvent.getCalledNumber(),
+                    "/pwa-192x192.png", "/leads");
             logger.info("Alerta número desconocido enviada: ext={} número={}",
                     callerExtension, callEvent.getCalledNumber());
         } catch (Exception e) {
