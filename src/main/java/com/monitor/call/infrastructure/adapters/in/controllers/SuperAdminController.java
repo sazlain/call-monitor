@@ -213,16 +213,12 @@ public class SuperAdminController {
     }
 
     @DeleteMapping("/plans/{planId}")
-    @Operation(summary = "Elimina un plan: borrado lógico si tiene licencias asociadas, físico si no tiene ninguna")
+    @Operation(summary = "Desactiva un plan (borrado lógico, nunca se elimina físicamente)")
     public ResponseEntity<Void> deletePlan(@PathVariable Long planId) {
         LicensePlanEntity plan = planRepo.findById(planId)
                 .orElseThrow(() -> new RuntimeException("Plan no encontrado: " + planId));
-        if (licenseRepo.existsByPlanId(planId)) {
-            plan.setActive(false);
-            planRepo.save(plan);
-        } else {
-            planRepo.delete(plan);
-        }
+        plan.setActive(false);
+        planRepo.save(plan);
         return ResponseEntity.noContent().build();
     }
 
