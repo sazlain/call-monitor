@@ -124,6 +124,35 @@ public class GlobalExceptionHandler {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
         }
 
+        // Errores de licencia
+        if (message.equals("LICENSE_PENDING")) {
+            logger.warn("Acceso bloqueado por licencia pendiente");
+            ErrorResponse error = new ErrorResponse();
+            error.setId("ERR403");
+            error.setTitle("Licencia pendiente de activación");
+            error.setMessage("Tu licencia aún no ha sido activada. Contacta al administrador de la plataforma.");
+            error.setHttpStatus(HttpStatus.FORBIDDEN);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        }
+        if (message.equals("LICENSE_EXPIRED")) {
+            logger.warn("Acceso bloqueado por licencia vencida");
+            ErrorResponse error = new ErrorResponse();
+            error.setId("ERR403");
+            error.setTitle("Licencia vencida");
+            error.setMessage("Tu licencia ha vencido. Contacta al administrador de la plataforma para renovarla.");
+            error.setHttpStatus(HttpStatus.FORBIDDEN);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        }
+        if (message.equals("LICENSE_SUSPENDED")) {
+            logger.warn("Acceso bloqueado por licencia suspendida");
+            ErrorResponse error = new ErrorResponse();
+            error.setId("ERR403");
+            error.setTitle("Licencia suspendida");
+            error.setMessage("Tu licencia está suspendida. Contacta al administrador de la plataforma.");
+            error.setHttpStatus(HttpStatus.FORBIDDEN);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        }
+
         // Detectar conflictos (duplicados)
         if (message.toLowerCase().contains("ya existe") ||
             message.toLowerCase().contains("ya esta registrado") ||
