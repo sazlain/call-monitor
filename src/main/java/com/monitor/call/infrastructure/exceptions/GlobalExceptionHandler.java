@@ -166,7 +166,7 @@ public class GlobalExceptionHandler {
 
         // Detectar conflictos (duplicados)
         if (message.toLowerCase().contains("ya existe") ||
-            message.toLowerCase().contains("ya esta registrado") ||
+            message.toLowerCase().contains("ya esta registrad") ||
             message.toLowerCase().contains("ya fue tipificada")) {
             logger.warn("Conflicto: {}", message);
             ErrorResponse error = new ErrorResponse();
