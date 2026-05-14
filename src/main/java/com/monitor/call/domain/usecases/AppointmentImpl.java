@@ -163,11 +163,11 @@ public class AppointmentImpl implements AppointmentUseCases {
         entity.setStatus(AppointmentStatus.CONFIRMED);
         appointmentRepo.save(entity);
 
-        // Lead se mantiene en APPOINTMENT (agendada) — confirmación no implica venta
+        // Lead hereda el estado CONFIRMED — el cliente confirmó asistencia
         if (entity.getLeadId() != null) {
-            leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.APPOINTMENT, null);
+            leadUseCases.updateLeadStatus(entity.getLeadId(), LeadStatus.CONFIRMED, null);
         }
-        logger.info("Cita confirmada: appointmentId={} leadId={} -> APPOINTMENT", appointmentId, entity.getLeadId());
+        logger.info("Cita confirmada: appointmentId={} leadId={} -> CONFIRMED", appointmentId, entity.getLeadId());
 
         return toResponse(entity);
     }

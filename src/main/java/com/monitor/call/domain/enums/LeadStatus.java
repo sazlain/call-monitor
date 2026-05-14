@@ -11,6 +11,7 @@ public enum LeadStatus {
     DISCARDED,
     APPOINTMENT,
     APPOINTMENT_RESCHEDULED,
+    CONFIRMED,
     ATTENDED,
     CANCELLED
 }
