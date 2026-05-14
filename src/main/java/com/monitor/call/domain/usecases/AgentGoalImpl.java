@@ -157,20 +157,24 @@ public class AgentGoalImpl implements AgentGoalUseCases {
         return result;
     }
 
-    // ── End-of-day evaluation ─────────────────────────────────────────────────
+    // ── On-demand / end-of-day evaluation ────────────────────────────────────
 
     @Override
     public List<AgentGoalHistoryResponse> evaluateDailyGoals() {
-        List<AgentGoal> dailyGoals = goalRepo.findActiveDailyGoals();
+        // Evaluate ALL active goals (any period) up to the current moment
+        List<AgentGoal> allGoals = new ArrayList<>();
+        allGoals.addAll(goalRepo.findByPeriod(GoalPeriod.DAILY));
+        allGoals.addAll(goalRepo.findByPeriod(GoalPeriod.WEEKLY));
+        allGoals.addAll(goalRepo.findByPeriod(GoalPeriod.MONTHLY));
+
         LocalDate today = LocalDate.now();
-        List<AgentGoalHistoryResponse> unmet = new ArrayList<>();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        List<AgentGoalHistoryResponse> results = new ArrayList<>();
 
         // Cache to avoid repeated DB lookups per agent
         Map<Long, Agent> agentCache = new ConcurrentHashMap<>();
 
-        for (AgentGoal goal : dailyGoals) {
-            // If goal is for a specific agent, evaluate only that agent
-            // If agentId is null, goal applies to ALL agents in that admin
+        for (AgentGoal goal : allGoals) {
             List<Long> targets;
             if (goal.getAgentId() != null) {
                 targets = List.of(goal.getAgentId());
@@ -180,46 +184,53 @@ public class AgentGoalImpl implements AgentGoalUseCases {
             }
 
             for (Long agentId : targets) {
-                // Skip if history already recorded today
-                if (goalRepo.findHistoryByGoalAndAgentAndDate(goal.getId(), agentId, today).isPresent()) {
-                    continue;
-                }
-
                 Agent agent = agentCache.computeIfAbsent(agentId,
                         id -> agentRepo.findById(id).orElse(null));
                 if (agent == null) continue;
 
-                double actual = computeActualValue(goal, agent);
+                double actual = computeActualValue(goal, agent, now);
                 boolean achieved = actual >= goal.getTargetValue();
 
-                AgentGoalHistory history = AgentGoalHistory.builder()
+                // Upsert: update today's record if it exists, create otherwise
+                Optional<AgentGoalHistory> existing =
+                        goalRepo.findHistoryByGoalAndAgentAndDate(goal.getId(), agentId, today);
+
+                AgentGoalHistory history = existing.map(h -> {
+                    h.setActualValue(actual);
+                    h.setAchieved(achieved);
+                    return h;
+                }).orElse(AgentGoalHistory.builder()
                         .goalId(goal.getId())
                         .agentId(agentId)
                         .snapshotDate(today)
                         .targetValue(goal.getTargetValue())
                         .actualValue(actual)
                         .achieved(achieved)
-                        .build();
-                AgentGoalHistory saved = goalRepo.saveHistory(history);
-                logger.info("Historial de meta guardado: goalId={} agentId={} achieved={}", goal.getId(), agentId, achieved);
+                        .build());
 
-                if (!achieved) {
-                    AgentGoalHistoryResponse resp = toHistoryResponse(saved,
-                            Map.of(goal.getId(), goal),
-                            Map.of(agentId, agent.getUserName() != null ? agent.getUserName() : "Agente " + agentId));
-                    unmet.add(resp);
-                }
+                AgentGoalHistory saved = goalRepo.saveHistory(history);
+                logger.info("Snapshot de meta guardado: goalId={} agentId={} actual={} achieved={}",
+                        goal.getId(), agentId, actual, achieved);
+
+                AgentGoalHistoryResponse resp = toHistoryResponse(saved,
+                        Map.of(goal.getId(), goal),
+                        Map.of(agentId, agent.getUserName() != null ? agent.getUserName() : "Agente " + agentId));
+                results.add(resp);
             }
         }
-        return unmet;
+        return results;
     }
 
     // ── KPI computation ───────────────────────────────────────────────────────
 
     private double computeActualValue(AgentGoal goal, Agent agent) {
+        return computeActualValue(goal, agent, null);
+    }
+
+    private double computeActualValue(AgentGoal goal, Agent agent, OffsetDateTime customTo) {
         OffsetDateTime[] range = dateRange(goal.getPeriod());
         OffsetDateTime from = range[0];
-        OffsetDateTime to   = range[1];
+        OffsetDateTime to   = customTo != null ? customTo : range[1];
         String ext = agent.getExtension();
         Long agentId = agent.getId();
 

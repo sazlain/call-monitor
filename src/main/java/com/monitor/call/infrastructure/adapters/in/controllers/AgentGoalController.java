@@ -85,6 +85,13 @@ public class AgentGoalController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/api/admin/goals/evaluate")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Evalúa las metas del día y guarda un snapshot en el historial")
+    public ResponseEntity<List<AgentGoalHistoryResponse>> evaluate() {
+        return ResponseEntity.ok(goalUseCases.evaluateDailyGoals());
+    }
+
     @GetMapping("/api/admin/goals/history")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Historial de metas evaluadas, filtros opcionales")
