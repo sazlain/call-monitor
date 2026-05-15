@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class CallHistoryResponse {
     private Long id;
     private String callId;
+    private String callApiId;
     private String callerExtension;
     private String callerIdNum;
     private String callerIdName;
@@ -19,6 +20,7 @@ public class CallHistoryResponse {
     private String callStatus;
     private String callFlow;
     private String createdAt;
+    private Integer durationSeconds;
     private Long agentId;
     private String agentName;
     private String agentExtension;

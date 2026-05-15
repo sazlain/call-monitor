@@ -124,29 +124,69 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
             @Param("to") OffsetDateTime to);
 
     @Query(value = """
-        SELECT e.id, e.call_id, e.caller_extension, e.caller_id_num, e.caller_id_name,
-               e.called_number, e.call_status, e.call_flow, e.created_at,
+        SELECT le.id, le.call_id, le.call_api_id, le.caller_extension, le.caller_id_num, le.caller_id_name,
+               le.called_number,
+               COALESCE(cs.answered_status, cs.terminal_status, le.call_status) AS call_status,
+               le.call_flow, le.created_at,
+               cs.duration_seconds,
                a.id AS agent_id, u.name AS agent_name, a.extension AS agent_extension,
                t.result AS typification_result, t.notes AS typification_notes,
                CAST(t.callback_date AS varchar) AS callback_date,
                t.lead_id, l.contact_name AS lead_contact_name, l.contact_phone AS lead_contact_phone
-        FROM call_events e
-        LEFT JOIN agents a ON a.extension = e.caller_extension AND a.active = true
+        FROM (
+            SELECT DISTINCT ON (call_id) id, call_id, call_api_id, caller_extension, caller_id_num, caller_id_name,
+                   called_number, call_status, call_flow, created_at
+            FROM call_events
+            WHERE (:extension IS NULL OR caller_extension = :extension)
+              AND (CAST(:from AS timestamptz) IS NULL OR created_at >= CAST(:from AS timestamptz))
+              AND (CAST(:to   AS timestamptz) IS NULL OR created_at <= CAST(:to   AS timestamptz))
+            ORDER BY call_id, created_at DESC
+        ) le
+        JOIN (
+            SELECT
+                call_id,
+                MAX(CASE WHEN call_status = 'ANSWER' THEN 'ANSWER' END) AS answered_status,
+                MAX(CASE WHEN call_status IN ('BUSY','NOANSWER','CANCEL','CONGESTION','CHANUNAVAIL')
+                         THEN call_status END)                           AS terminal_status,
+                EXTRACT(EPOCH FROM (
+                    MAX(CASE WHEN call_status = 'HANGUP' THEN created_at END) -
+                    MAX(CASE WHEN call_status = 'ANSWER' THEN created_at END)
+                ))::int AS duration_seconds
+            FROM call_events
+            WHERE (:extension IS NULL OR caller_extension = :extension)
+              AND (CAST(:from AS timestamptz) IS NULL OR created_at >= CAST(:from AS timestamptz))
+              AND (CAST(:to   AS timestamptz) IS NULL OR created_at <= CAST(:to   AS timestamptz))
+            GROUP BY call_id
+        ) cs ON cs.call_id = le.call_id
+        LEFT JOIN agents a ON a.extension = le.caller_extension AND a.active = true
         LEFT JOIN users u ON u.id = a.user_id
-        LEFT JOIN call_typifications t ON t.call_id = e.call_id
+        LEFT JOIN call_typifications t ON t.call_id = le.call_id
         LEFT JOIN leads l ON l.id = t.lead_id
-        WHERE (:status IS NULL OR e.call_status = :status)
-          AND (:extension IS NULL OR e.caller_extension = :extension)
-          AND (CAST(:from AS timestamptz) IS NULL OR e.created_at >= CAST(:from AS timestamptz))
-          AND (CAST(:to   AS timestamptz) IS NULL OR e.created_at <= CAST(:to   AS timestamptz))
-        ORDER BY e.created_at DESC
+        WHERE (:status IS NULL OR COALESCE(cs.answered_status, cs.terminal_status, le.call_status) = :status)
+        ORDER BY le.created_at DESC
         """,
         countQuery = """
-        SELECT COUNT(*) FROM call_events e
-        WHERE (:status IS NULL OR e.call_status = :status)
-          AND (:extension IS NULL OR e.caller_extension = :extension)
-          AND (CAST(:from AS timestamptz) IS NULL OR e.created_at >= CAST(:from AS timestamptz))
-          AND (CAST(:to   AS timestamptz) IS NULL OR e.created_at <= CAST(:to   AS timestamptz))
+        SELECT COUNT(*) FROM (
+            SELECT DISTINCT ON (call_id) call_id, call_status
+            FROM call_events
+            WHERE (:extension IS NULL OR caller_extension = :extension)
+              AND (CAST(:from AS timestamptz) IS NULL OR created_at >= CAST(:from AS timestamptz))
+              AND (CAST(:to   AS timestamptz) IS NULL OR created_at <= CAST(:to   AS timestamptz))
+            ORDER BY call_id, created_at DESC
+        ) le
+        JOIN (
+            SELECT
+                call_id,
+                MAX(CASE WHEN call_status = 'ANSWER' THEN 'ANSWER' END) AS answered_status,
+                MAX(CASE WHEN call_status IN ('BUSY','NOANSWER','CANCEL','CONGESTION','CHANUNAVAIL')
+                         THEN call_status END) AS terminal_status
+            FROM call_events
+            WHERE (:extension IS NULL OR caller_extension = :extension)
+              AND (CAST(:from AS timestamptz) IS NULL OR created_at >= CAST(:from AS timestamptz))
+              AND (CAST(:to   AS timestamptz) IS NULL OR created_at <= CAST(:to   AS timestamptz))
+            GROUP BY call_id
+        ) cs ON cs.call_id = le.call_id
+        WHERE (:status IS NULL OR COALESCE(cs.answered_status, cs.terminal_status, le.call_status) = :status)
         """,
         nativeQuery = true)
     Page<Object[]> findHistory(
