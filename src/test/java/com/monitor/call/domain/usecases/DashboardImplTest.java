@@ -86,12 +86,11 @@ class DashboardImplTest {
         when(dashRepo.minDurationSeconds(eq(ext), any(), any())).thenReturn(30.0);
         when(dashRepo.countShortCalls(eq(ext), any(), any())).thenReturn(3L);
         when(dashRepo.countLongCalls(eq(ext), any(), any())).thenReturn(1L);
-        when(typPort.findByAgentId(10L)).thenReturn(List.of());
         when(typPort.countByResultForAgent(eq(10L), any(), any())).thenReturn(List.of());
         when(dashRepo.countByHour(eq(ext), any(), any())).thenReturn(List.of());
         when(dashRepo.countByDay(eq(ext), any(), any())).thenReturn(List.of());
         when(dashRepo.countByDayOfWeek(eq(ext), any(), any())).thenReturn(List.of());
-        when(dashRepo.findRecentEvents(eq(List.of(ext)), eq(20))).thenReturn(List.of());
+        when(dashRepo.findRecentEvents(eq(List.of(ext)), eq(50))).thenReturn(List.of());
         when(dashRepo.findActiveExtensions(List.of(ext))).thenReturn(List.of(ext));
 
         AgentDashboardResponse resp = dashboardImpl.getAgentDashboard(ext, from(), to());
@@ -130,12 +129,11 @@ class DashboardImplTest {
         when(dashRepo.minDurationSeconds(eq(ext), any(), any())).thenReturn(null);
         when(dashRepo.countShortCalls(eq(ext), any(), any())).thenReturn(0L);
         when(dashRepo.countLongCalls(eq(ext), any(), any())).thenReturn(0L);
-        when(typPort.findByAgentId(11L)).thenReturn(List.of());
         when(typPort.countByResultForAgent(eq(11L), any(), any())).thenReturn(List.of());
         when(dashRepo.countByHour(eq(ext), any(), any())).thenReturn(List.of());
         when(dashRepo.countByDay(eq(ext), any(), any())).thenReturn(List.of());
         when(dashRepo.countByDayOfWeek(eq(ext), any(), any())).thenReturn(List.of());
-        when(dashRepo.findRecentEvents(eq(List.of(ext)), eq(20))).thenReturn(List.of());
+        when(dashRepo.findRecentEvents(eq(List.of(ext)), eq(50))).thenReturn(List.of());
         when(dashRepo.findActiveExtensions(List.of(ext))).thenReturn(List.of());
 
         AgentDashboardResponse resp = dashboardImpl.getAgentDashboard(ext, from(), to());
@@ -163,7 +161,6 @@ class DashboardImplTest {
         when(dashRepo.minDurationSeconds(eq(ext), any(), any())).thenReturn(50.0);
         when(dashRepo.countShortCalls(eq(ext), any(), any())).thenReturn(0L);
         when(dashRepo.countLongCalls(eq(ext), any(), any())).thenReturn(0L);
-        when(typPort.findByAgentId(12L)).thenReturn(List.of());
         // result distribution with one row: ["SALE", 3]
         List<Object[]> resultRows = List.<Object[]>of(new Object[]{"SALE", 3L});
         when(typPort.countByResultForAgent(eq(12L), any(), any())).thenReturn(resultRows);
@@ -171,7 +168,7 @@ class DashboardImplTest {
         when(dashRepo.countByDay(eq(ext), any(), any())).thenReturn(List.of());
         List<Object[]> dowRows = List.<Object[]>of(new Object[]{1, 3L});
         when(dashRepo.countByDayOfWeek(eq(ext), any(), any())).thenReturn(dowRows);
-        when(dashRepo.findRecentEvents(eq(List.of(ext)), eq(20))).thenReturn(List.of());
+        when(dashRepo.findRecentEvents(eq(List.of(ext)), eq(50))).thenReturn(List.of());
         when(dashRepo.findActiveExtensions(List.of(ext))).thenReturn(List.of(ext));
 
         AgentDashboardResponse resp = dashboardImpl.getAgentDashboard(ext, from(), to());

@@ -46,7 +46,7 @@ public class EmailPreviewController {
         emailService.send(to, "Alerta: agentes inactivos (2)",
                 emailTemplates.idleAgentsAlert("Pedro Sánchez, Ana López", 30, now));
 
-        emailService.send(to, "Resumen diario — Voxio",
+        emailService.send(to, "Resumen diario — ZentCall",
                 emailTemplates.dailySummary(
                         "2026-05-14",
                         List.of(

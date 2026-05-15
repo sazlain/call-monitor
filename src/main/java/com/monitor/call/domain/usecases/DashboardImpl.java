@@ -73,16 +73,14 @@ public class DashboardImpl implements DashboardUseCases {
         double hours = java.time.Duration.between(from, to).toHours();
         double callsPerHour = hours > 0 ? Math.round((total / hours) * 10.0) / 10.0 : 0;
 
-        long typified = typPort.findByAgentId(agentOpt.getId()).stream()
-                .filter(t -> t.getCreatedAt().isAfter(from) && t.getCreatedAt().isBefore(to))
-                .count();
-        long untypified = answered - typified;
-
         List<Object[]> resultRows = typPort.countByResultForAgent(agentOpt.getId(), from, to);
         List<AgentDashboardResponse.ResultCount> resultDist = resultRows.stream()
                 .map(r -> AgentDashboardResponse.ResultCount.builder()
                         .result(r[0].toString()).count(((Number) r[1]).longValue()).build())
                 .toList();
+
+        long typified   = resultDist.stream().mapToLong(AgentDashboardResponse.ResultCount::getCount).sum();
+        long untypified = Math.max(0, answered - typified);
 
         List<AgentDashboardResponse.HourlyCount> byHour = dashRepo.countByHour(extension, from, to).stream()
                 .map(r -> AgentDashboardResponse.HourlyCount.builder()
@@ -101,8 +99,17 @@ public class DashboardImpl implements DashboardUseCases {
                             .count(((Number) r[1]).longValue()).build(); })
                 .toList();
 
-        List<RecentCallResponse> recent = dashRepo.findRecentEvents(List.of(extension), 20).stream()
-                .map(this::toRecentCall).toList();
+        // Fetch 50 raw events and deduplicate to 10 unique calls (keeps last event per callId)
+        List<RecentCallResponse> recent = dashRepo.findRecentEvents(List.of(extension), 50).stream()
+                .collect(Collectors.toMap(
+                        CallEvent::getCallId,
+                        e -> e,
+                        (a, b) -> a.getCreatedAt().isAfter(b.getCreatedAt()) ? a : b,
+                        java.util.LinkedHashMap::new))
+                .values().stream()
+                .limit(10)
+                .map(this::toRecentCall)
+                .toList();
 
         boolean isActive = !dashRepo.findActiveExtensions(List.of(extension)).isEmpty();
 
@@ -276,7 +283,9 @@ public class DashboardImpl implements DashboardUseCases {
         LocalDate fromDate = from.toLocalDate();
         LocalDate toDate   = to.toLocalDate();
         var leadsInPeriod  = leads.stream()
-                .filter(l -> !l.getLeadDate().isBefore(fromDate) && !l.getLeadDate().isAfter(toDate))
+                .filter(l -> l.getLeadDate() != null
+                        && !l.getLeadDate().isBefore(fromDate)
+                        && !l.getLeadDate().isAfter(toDate))
                 .toList();
 
         long total = leadsInPeriod.size();

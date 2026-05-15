@@ -150,7 +150,7 @@ public class ScheduledAlertService {
 
             String html = emailTemplates.dailySummary(date, agentRows, totalCalls, totalAnswered, durationMinutes);
 
-            emailService.send(admin.getEmail(), "Resumen diario — Voxio", html);
+            emailService.send(admin.getEmail(), "Resumen diario — ZentCall", html);
             pushService.sendToAll(pushRepo.findByUserId(admin.getId()),
                     "Resumen del día",
                     totalCalls + " llamadas — " + totalAnswered + " contestadas en " + durationMinutes + " min",

@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Plantillas HTML profesionales para los correos de Voxio.
+ * Plantillas HTML profesionales para los correos de ZentCall.
  * Utiliza Thymeleaf para procesar las plantillas ubicadas en
  * src/main/resources/templates/email/
  */

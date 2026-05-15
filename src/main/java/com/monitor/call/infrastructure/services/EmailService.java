@@ -86,7 +86,7 @@ public class EmailService {
                "<h2 style='color:#1f2937;margin-bottom:16px;'>" + title + "</h2>" +
                body +
                "<hr style='margin-top:24px;border:none;border-top:1px solid #e5e7eb;'/>" +
-               "<p style='color:#9ca3af;font-size:12px;margin-top:8px;'>Voxio — Sistema de gestión de llamadas</p>" +
+               "<p style='color:#9ca3af;font-size:12px;margin-top:8px;'>ZentCall — Sistema de gestión de llamadas</p>" +
                "</div>";
     }
 }
