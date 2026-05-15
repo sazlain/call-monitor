@@ -2,6 +2,7 @@ package com.monitor.call.infrastructure.adapters.in.controllers;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,6 +20,18 @@ import org.springframework.web.client.RestTemplate;
 public class OAuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(OAuthController.class);
+
+    @Value("${oauth.token-url}")
+    private String tokenUrl;
+
+    @Value("${oauth.client-id}")
+    private String clientId;
+
+    @Value("${oauth.client-secret}")
+    private String clientSecret;
+
+    @Value("${oauth.redirect-uri}")
+    private String redirectUri;
 
     @GetMapping("/callback")
     public ResponseEntity<?> handleCallback(
@@ -45,14 +58,12 @@ public class OAuthController {
         try {
             RestTemplate restTemplate = new RestTemplate();
 
-            String url = "https://portalmx5.net2phoneoffice.com/oauth/token.php";
-
             MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
             body.add("grant_type", "authorization_code");
             body.add("code", code);
-            body.add("redirect_uri", "https://llamadasdev.homezafiro.com/oauth/callback");
-            body.add("client_id", "65M1mh14");
-            body.add("client_secret", "IUB3o9Vedpr5JWyNYWuOiHtUJ74ql4wJ");
+            body.add("redirect_uri", redirectUri);
+            body.add("client_id", clientId);
+            body.add("client_secret", clientSecret);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -61,7 +72,7 @@ public class OAuthController {
                     new HttpEntity<>(body, headers);
 
             ResponseEntity<String> response =
-                    restTemplate.postForEntity(url, request, String.class);
+                    restTemplate.postForEntity(tokenUrl, request, String.class);
 
             logger.info("Token response: {}", response.getBody());
 
