@@ -24,19 +24,21 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
 
     // ── Bloque 1+2: KPIs de volumen ──────────────────────────────────────────
 
-    @Query("SELECT COUNT(DISTINCT e.callId) FROM CallEventEntity e WHERE e.callerExtension = :ext AND e.callStatus = 'CALLING' AND e.createdAt BETWEEN :from AND :to")
+    // Total = todos los call_id distintos en el rango (no filtramos por status CALLING
+    //         porque algunos proveedores no envían ese evento)
+    @Query(value = "SELECT COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND created_at BETWEEN :from AND :to", nativeQuery = true)
     long countTotalCalls(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
-    @Query("SELECT COUNT(DISTINCT e.callId) FROM CallEventEntity e WHERE e.callerExtension = :ext AND e.callStatus = 'ANSWER' AND e.createdAt BETWEEN :from AND :to")
+    @Query(value = "SELECT COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND call_status = 'ANSWER' AND created_at BETWEEN :from AND :to", nativeQuery = true)
     long countAnsweredCalls(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
-    @Query("SELECT COUNT(DISTINCT e.callId) FROM CallEventEntity e WHERE e.callerExtension = :ext AND e.callStatus IN ('NOANSWER','BUSY','CANCEL','CONGESTION','CHANUNAVAIL') AND e.createdAt BETWEEN :from AND :to")
+    @Query(value = "SELECT COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND call_status IN ('NOANSWER','BUSY','CANCEL','CONGESTION','CHANUNAVAIL') AND created_at BETWEEN :from AND :to", nativeQuery = true)
     long countMissedCalls(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
-    @Query("SELECT COUNT(DISTINCT e.callId) FROM CallEventEntity e WHERE e.callerExtension = :ext AND e.callFlow = 'out' AND e.callStatus = 'CALLING' AND e.createdAt BETWEEN :from AND :to")
+    @Query(value = "SELECT COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND call_flow = 'out' AND created_at BETWEEN :from AND :to", nativeQuery = true)
     long countOutboundCalls(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
-    @Query("SELECT COUNT(DISTINCT e.callId) FROM CallEventEntity e WHERE e.callerExtension = :ext AND e.callFlow = 'in' AND e.callStatus = 'CALLING' AND e.createdAt BETWEEN :from AND :to")
+    @Query(value = "SELECT COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND call_flow = 'in' AND created_at BETWEEN :from AND :to", nativeQuery = true)
     long countInboundCalls(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
     // ── Bloque 2: Duracion — nativeQuery porque JPQL no soporta self-JOIN con ON ──
@@ -58,13 +60,13 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
 
     // ── Bloque 3+7: Tendencias temporales ────────────────────────────────────
 
-    @Query(value = "SELECT EXTRACT(HOUR FROM created_at) AS hour, COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND call_status = 'CALLING' AND created_at BETWEEN :from AND :to GROUP BY EXTRACT(HOUR FROM created_at) ORDER BY hour", nativeQuery = true)
+    @Query(value = "SELECT EXTRACT(HOUR FROM created_at) AS hour, COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND created_at BETWEEN :from AND :to GROUP BY EXTRACT(HOUR FROM created_at) ORDER BY hour", nativeQuery = true)
     List<Object[]> countByHour(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
-    @Query(value = "SELECT CAST(created_at AS date), COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND call_status = 'CALLING' AND created_at BETWEEN :from AND :to GROUP BY CAST(created_at AS date) ORDER BY CAST(created_at AS date)", nativeQuery = true)
+    @Query(value = "SELECT CAST(created_at AS date), COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND created_at BETWEEN :from AND :to GROUP BY CAST(created_at AS date) ORDER BY CAST(created_at AS date)", nativeQuery = true)
     List<Object[]> countByDay(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
-    @Query(value = "SELECT EXTRACT(DOW FROM created_at) AS dow, COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND call_status = 'CALLING' AND created_at BETWEEN :from AND :to GROUP BY EXTRACT(DOW FROM created_at) ORDER BY dow", nativeQuery = true)
+    @Query(value = "SELECT EXTRACT(DOW FROM created_at) AS dow, COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension = :ext AND created_at BETWEEN :from AND :to GROUP BY EXTRACT(DOW FROM created_at) ORDER BY dow", nativeQuery = true)
     List<Object[]> countByDayOfWeek(@Param("ext") String ext, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
     // ── Bloque 5: Estado en tiempo real ──────────────────────────────────────
@@ -86,10 +88,21 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
 
     // ── Bloque 6: Resumen por multiples extensiones ───────────────────────────
 
-    @Query(value = "SELECT caller_extension, COUNT(DISTINCT CASE WHEN call_status = 'CALLING' THEN call_id END), COUNT(DISTINCT CASE WHEN call_status = 'ANSWER' THEN call_id END), COUNT(DISTINCT CASE WHEN call_status IN ('NOANSWER','BUSY','CANCEL','CONGESTION','CHANUNAVAIL') THEN call_id END) FROM call_events WHERE caller_extension IN :extensions AND created_at BETWEEN :from AND :to GROUP BY caller_extension", nativeQuery = true)
+    // col[0]=extension  col[1]=total  col[2]=answered  col[3]=missed
+    // Total = todos los call_id distintos (sin filtrar por CALLING)
+    @Query(value = """
+        SELECT caller_extension,
+               COUNT(DISTINCT call_id)                                                                                              AS total,
+               COUNT(DISTINCT CASE WHEN call_status = 'ANSWER'                                              THEN call_id END)      AS answered,
+               COUNT(DISTINCT CASE WHEN call_status IN ('NOANSWER','BUSY','CANCEL','CONGESTION','CHANUNAVAIL') THEN call_id END)   AS missed
+        FROM call_events
+        WHERE caller_extension IN :extensions
+          AND created_at BETWEEN :from AND :to
+        GROUP BY caller_extension
+        """, nativeQuery = true)
     List<Object[]> getCallSummaryByExtensions(@Param("extensions") List<String> extensions, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
-    @Query(value = "SELECT CAST(created_at AS date), caller_extension, COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension IN :extensions AND call_status = 'CALLING' AND created_at BETWEEN :from AND :to GROUP BY CAST(created_at AS date), caller_extension ORDER BY CAST(created_at AS date)", nativeQuery = true)
+    @Query(value = "SELECT CAST(created_at AS date), caller_extension, COUNT(DISTINCT call_id) FROM call_events WHERE caller_extension IN :extensions AND created_at BETWEEN :from AND :to GROUP BY CAST(created_at AS date), caller_extension ORDER BY CAST(created_at AS date)", nativeQuery = true)
     List<Object[]> countByDayAndExtension(@Param("extensions") List<String> extensions, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
 
     @Query(value = "SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (h.created_at - a.created_at))), 0) FROM call_events a JOIN call_events h ON h.call_id = a.call_id AND h.call_status = 'HANGUP' WHERE a.caller_extension IN :extensions AND a.call_status = 'ANSWER' AND a.created_at BETWEEN :from AND :to", nativeQuery = true)
