@@ -12,7 +12,6 @@ public class Agent {
     private String userName;
     private String userEmail;
     private Boolean active;
-    private Long adminId;    // id del admin dueño del grupo al que pertenece este agente
     private Long groupId;
     private String groupName;
     private OffsetDateTime createdAt;

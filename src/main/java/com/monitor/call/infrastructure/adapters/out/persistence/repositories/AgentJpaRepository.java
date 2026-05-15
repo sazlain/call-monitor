@@ -37,4 +37,8 @@ public interface AgentJpaRepository extends JpaRepository<AgentEntity, Long> {
     /** Agentes de todos los grupos de un admin */
     @Query("SELECT a FROM AgentEntity a JOIN FETCH a.group WHERE a.group.adminId = :adminId AND a.active = true")
     List<AgentEntity> findByAdminId(@Param("adminId") Long adminId);
+
+    /** Todos los agentes de un admin incluyendo inactivos (para reactivación) */
+    @Query("SELECT a FROM AgentEntity a WHERE a.group.adminId = :adminId")
+    List<AgentEntity> findAllByAdminId(@Param("adminId") Long adminId);
 }
