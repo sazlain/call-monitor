@@ -137,6 +137,20 @@ public class AgentImpl implements AgentUseCases {
         logger.info("Agente desactivado: {}", agentId);
     }
 
+    @Override
+    @Transactional
+    public void reactivateAgent(Long agentId, Long adminId) {
+        agentRepo.findById(agentId)
+                .orElseThrow(() -> new RuntimeException("Agente no encontrado"));
+        agentRepo.reactivate(agentId);
+        logger.info("Agente reactivado: {}", agentId);
+    }
+
+    @Override
+    public List<AgentResponse> listAllAgentsByAdmin(Long adminId) {
+        return toResponseList(agentRepo.findAllByAdminId(adminId));
+    }
+
     private AgentResponse toResponse(Agent agent) {
         return userRepo.findById(agent.getUserId())
                 .map(u -> AgentMapper.domainToResponseWithName(agent, u.getName(), u.getEmail()))

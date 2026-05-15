@@ -68,6 +68,7 @@ public class OAuthController {
             return response.getBody();
 
         } catch (Exception e) {
+            logger.error("Error obteniendo token OAuth: {}", e.getMessage(), e);
             throw new RuntimeException("Error getting token", e);
         }
     }

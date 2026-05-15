@@ -12,4 +12,6 @@ public interface AgentUseCases {
     List<AgentResponse> listAgentsByAdmin(Long adminId);
     AgentResponse updateAgent(Long agentId, String name, String extension, Long adminId);
     void deactivateAgent(Long agentId, Long adminId);
+    void reactivateAgent(Long agentId, Long adminId);
+    List<AgentResponse> listAllAgentsByAdmin(Long adminId);
 }

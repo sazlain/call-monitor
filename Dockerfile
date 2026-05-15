@@ -12,7 +12,7 @@ COPY .mvn .mvn
 COPY src src
 
 # Construir la aplicación
-RUN ./mvnw clean package -DskipTests
+RUN ./mvnw clean package
 
 # Etapa final: imagen con JRE
 FROM eclipse-temurin:17-jdk-jammy

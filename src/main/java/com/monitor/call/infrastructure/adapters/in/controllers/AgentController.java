@@ -43,15 +43,18 @@ public class AgentController {
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Listar agentes. Filtra por groupId si se provee.")
+    @Operation(summary = "Listar agentes. Filtra por groupId si se provee. includeInactive=true para ver inactivos.")
     public ResponseEntity<List<AgentResponse>> list(
             @RequestParam(required = false) Long groupId,
+            @RequestParam(required = false, defaultValue = "false") boolean includeInactive,
             @RequestHeader("Authorization") String auth) {
 
         Long adminId = jwtUtil.extractUserId(auth.substring(7));
         List<AgentResponse> agents = groupId != null
                 ? agentUseCases.listAgentsByGroup(groupId)
-                : agentUseCases.listAgentsByAdmin(adminId);
+                : (includeInactive
+                        ? agentUseCases.listAllAgentsByAdmin(adminId)
+                        : agentUseCases.listAgentsByAdmin(adminId));
         return ResponseEntity.ok(agents);
     }
 
@@ -92,5 +95,22 @@ public class AgentController {
         Long adminId = jwtUtil.extractUserId(auth.substring(7));
         agentUseCases.deactivateAgent(agentId, adminId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{agentId}/toggle-active")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Alternar estado activo/inactivo de un agente")
+    public ResponseEntity<AgentResponse> toggleActive(
+            @PathVariable Long agentId,
+            @RequestHeader("Authorization") String auth) {
+
+        Long adminId = jwtUtil.extractUserId(auth.substring(7));
+        AgentResponse agent = agentUseCases.getAgent(agentId);
+        if (Boolean.TRUE.equals(agent.getActive())) {
+            agentUseCases.deactivateAgent(agentId, adminId);
+        } else {
+            agentUseCases.reactivateAgent(agentId, adminId);
+        }
+        return ResponseEntity.ok(agentUseCases.getAgent(agentId));
     }
 }

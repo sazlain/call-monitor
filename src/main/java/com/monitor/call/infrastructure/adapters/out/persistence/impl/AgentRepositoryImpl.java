@@ -102,4 +102,15 @@ public class AgentRepositoryImpl implements AgentRepositoryPort {
     public void deactivate(Long agentId) {
         agentRepo.findById(agentId).ifPresent(a -> { a.setActive(false); agentRepo.save(a); });
     }
+
+    @Override
+    public void reactivate(Long agentId) {
+        agentRepo.findById(agentId).ifPresent(a -> { a.setActive(true); agentRepo.save(a); });
+    }
+
+    @Override
+    public List<Agent> findAllByAdminId(Long adminId) {
+        return agentRepo.findAllByAdminId(adminId).stream()
+                .map(AgentMapper::entityToDomain).toList();
+    }
 }

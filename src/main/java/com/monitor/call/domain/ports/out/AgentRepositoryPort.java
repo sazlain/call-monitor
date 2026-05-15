@@ -15,4 +15,6 @@ public interface AgentRepositoryPort {
     List<String> findExtensionsByAdminId(Long adminId);
     boolean existsByExtension(String extension);
     void deactivate(Long agentId);
+    void reactivate(Long agentId);
+    List<Agent> findAllByAdminId(Long adminId);
 }
