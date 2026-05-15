@@ -48,24 +48,26 @@ class CallHistoryRepositoryImplTest {
     @Test
     void findHistory_withRows_mapsToCallHistoryResponse() {
         Object[] row = new Object[]{
-            1L,           // id
-            "CALL-001",   // callId
-            "1001",       // callerExtension
-            "5551001",    // callerIdNum
-            "Contact",    // callerIdName
-            "5550001",    // calledNumber
-            "HANGUP",     // callStatus
-            "out",        // callFlow
-            OffsetDateTime.of(2026, 5, 10, 10, 0, 0, 0, ZoneOffset.UTC), // createdAt
-            10L,          // agentId
-            "Agent Ana",  // agentName
-            "1001",       // agentExtension
-            "SALE",       // typificationResult
-            "Good call",  // typificationNotes
-            null,         // callbackDate
-            5L,           // leadId
-            "Juan",       // leadContactName
-            "5551000"     // leadContactPhone
+            1L,           // [0]  id
+            "CALL-001",   // [1]  callId
+            "API-XYZ",    // [2]  callApiId
+            "1001",       // [3]  callerExtension
+            "5551001",    // [4]  callerIdNum
+            "Contact",    // [5]  callerIdName
+            "5550001",    // [6]  calledNumber
+            "ANSWER",     // [7]  callStatus (outcome)
+            "out",        // [8]  callFlow
+            OffsetDateTime.of(2026, 5, 10, 10, 0, 0, 0, ZoneOffset.UTC), // [9] createdAt
+            65,           // [10] durationSeconds
+            10L,          // [11] agentId
+            "Agent Ana",  // [12] agentName
+            "1001",       // [13] agentExtension
+            "SALE",       // [14] typificationResult
+            "Good call",  // [15] typificationNotes
+            null,         // [16] callbackDate
+            5L,           // [17] leadId
+            "Juan",       // [18] leadContactName
+            "5551000"     // [19] leadContactPhone
         };
         Page<Object[]> page = new PageImpl<Object[]>(List.<Object[]>of(row), PageRequest.of(0, 25), 1);
         when(jpaRepo.findHistory(isNull(), isNull(), any(), any(), any()))
@@ -76,6 +78,9 @@ class CallHistoryRepositoryImplTest {
         assertThat(result.getTotalElements()).isEqualTo(1L);
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getCallId()).isEqualTo("CALL-001");
+        assertThat(result.getContent().get(0).getCallApiId()).isEqualTo("API-XYZ");
+        assertThat(result.getContent().get(0).getCallStatus()).isEqualTo("ANSWER");
+        assertThat(result.getContent().get(0).getDurationSeconds()).isEqualTo(65);
         assertThat(result.getContent().get(0).getAgentName()).isEqualTo("Agent Ana");
         assertThat(result.getContent().get(0).getTypificationResult()).isEqualTo("SALE");
     }
