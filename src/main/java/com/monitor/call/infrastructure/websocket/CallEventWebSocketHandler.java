@@ -130,6 +130,13 @@ public class CallEventWebSocketHandler {
             sendUnknownCallAlert(callEvent, callEvent.getCallerExtension(), adminId);
         }
 
+        String frontendAction = resolveFrontendAction(callEvent.getCallStatus(), lead, createLeadEnabled);
+        logger.info("frontendAction={} lead={} callerExt={} status={}",
+                frontendAction,
+                lead != null ? "id=" + lead.getId() : "null",
+                callEvent.getCallerExtension(),
+                callEvent.getCallStatus());
+
         return CallEventWebSocketMessage.builder()
                 .callId(callEvent.getCallId())
                 .callerExtension(callEvent.getCallerExtension())
@@ -141,12 +148,13 @@ public class CallEventWebSocketHandler {
                 .callFlow(callEvent.getCallFlow())
                 .callAPIID(callEvent.getCallAPIID())
                 .timestamp(OffsetDateTime.now())
-                .frontendAction(resolveFrontendAction(callEvent.getCallStatus(), lead, createLeadEnabled))
+                .frontendAction(frontendAction)
                 .leadId(lead != null ? lead.getId() : null)
                 .leadContactName(lead != null ? lead.getContactName() : null)
                 .leadContactPhone(lead != null ? lead.getContactPhone() : null)
                 .leadNotes(lead != null ? lead.getNotes() : null)
                 .leadStatus(lead != null ? lead.getStatus().name() : null)
+                .leadFound(lead != null)
                 .build();
     }
 
