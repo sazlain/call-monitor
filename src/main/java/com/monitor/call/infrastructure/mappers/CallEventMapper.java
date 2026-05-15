@@ -65,18 +65,38 @@ public class CallEventMapper {
                 .build();
     }
 
+    /**
+     * Convierte el payload del webhook al request interno.
+     * El proveedor envía claves en PascalCase (CallStatus, CallerExtension, etc.)
+     * pero para mayor robustez se hace lookup case-insensitive.
+     */
     public static CallEventRequest payloadToRequest(Map<String, String> payload) {
+        // Normalizar todas las claves a minúsculas para comparación case-insensitive
+        Map<String, String> normalized = new java.util.HashMap<>();
+        payload.forEach((k, v) -> normalized.put(k.toLowerCase(), v));
+
+        String rawStatus = get(normalized, "callstatus");
+        String rawFlow   = get(normalized, "callflow");
+
+        if (rawStatus == null) throw new IllegalArgumentException("CallStatus ausente en el payload");
+        if (rawFlow   == null) throw new IllegalArgumentException("CallFlow ausente en el payload");
+
         return CallEventRequest.builder()
-                .callId(payload.get("CallID"))
-                .callerIdNum(payload.get("CallerIDNum"))
-                .callerIdName(payload.get("CallerIDName"))
-                .calledDID(payload.get("CalledDID"))
-                .calledExtension(payload.get("CalledExtension"))
-                .callStatus(CallStatus.valueOf(payload.get("CallStatus")))
-                .callFlow(CallFlow.valueOf(payload.get("CallFlow")))
-                .callerExtension(payload.get("CallerExtension"))
-                .calledNumber(payload.get("CalledNumber"))
-                .callAPIID(payload.get("CallAPIID"))
+                .callId(get(normalized, "callid"))
+                .callerIdNum(get(normalized, "calleridnum"))
+                .callerIdName(get(normalized, "calleridname"))
+                .calledDID(get(normalized, "calleddid"))
+                .calledExtension(get(normalized, "calledextension"))
+                .callStatus(CallStatus.valueOf(rawStatus.toUpperCase()))
+                .callFlow(CallFlow.valueOf(rawFlow.toUpperCase()))
+                .callerExtension(get(normalized, "callerextension"))
+                .calledNumber(get(normalized, "callednumber"))
+                .callAPIID(get(normalized, "callapiid"))
                 .build();
+    }
+
+    private static String get(Map<String, String> map, String key) {
+        String v = map.get(key);
+        return (v == null || v.isBlank()) ? null : v;
     }
 }
