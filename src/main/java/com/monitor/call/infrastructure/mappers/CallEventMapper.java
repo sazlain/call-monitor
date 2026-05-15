@@ -88,7 +88,7 @@ public class CallEventMapper {
                 .calledDID(get(normalized, "calleddid"))
                 .calledExtension(get(normalized, "calledextension"))
                 .callStatus(CallStatus.valueOf(rawStatus.toUpperCase()))
-                .callFlow(CallFlow.valueOf(rawFlow.toUpperCase()))
+                .callFlow(CallFlow.valueOf(rawFlow.toLowerCase()))
                 .callerExtension(get(normalized, "callerextension"))
                 .calledNumber(get(normalized, "callednumber"))
                 .callAPIID(get(normalized, "callapiid"))
