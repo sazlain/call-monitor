@@ -2,11 +2,11 @@ package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.models.AgentGroup;
+import com.monitor.call.domain.models.User;
 import com.monitor.call.domain.ports.out.AgentGroupRepositoryPort;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
+import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.AgentGroupResponse;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.UserEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,7 +25,7 @@ class AgentGroupImplTest {
 
     @Mock private AgentGroupRepositoryPort groupRepo;
     @Mock private AgentRepositoryPort agentRepo;
-    @Mock private UserJpaRepository userJpaRepository;
+    @Mock private UserRepositoryPort userRepo;
 
     @InjectMocks
     private AgentGroupImpl agentGroupImpl;
@@ -45,9 +45,12 @@ class AgentGroupImplTest {
                 .active(true).groupId(groupId).build();
     }
 
-    private UserEntity buildUserEntity(Long id, String name) {
-        return UserEntity.builder().id(id).name(name).email(name + "@test.com")
-                .password("hash").active(true).build();
+    private User buildUser(Long id, String name) {
+        return User.builder().id(id).name(name).email(name + "@test.com").active(true).build();
+    }
+
+    private void stubEmptyUsers() {
+        when(userRepo.findAllById(any())).thenReturn(List.of());
     }
 
     // ─── createGroup ──────────────────────────────────────────────────────────────
@@ -58,7 +61,7 @@ class AgentGroupImplTest {
         AgentGroup saved = buildGroup(10L, "Sales", 1L);
         when(groupRepo.save(any())).thenReturn(saved);
         when(agentRepo.findByGroupId(10L)).thenReturn(List.of());
-        when(userJpaRepository.findAllById(any())).thenReturn(List.of());
+        stubEmptyUsers();
 
         AgentGroupResponse resp = agentGroupImpl.createGroup("Sales", "desc", 1L);
 
@@ -83,7 +86,7 @@ class AgentGroupImplTest {
         AgentGroup group = buildGroup(10L, "Sales", 1L);
         when(groupRepo.findByIdAndAdminId(10L, 1L)).thenReturn(Optional.of(group));
         when(agentRepo.findByGroupId(10L)).thenReturn(List.of());
-        when(userJpaRepository.findAllById(any())).thenReturn(List.of());
+        stubEmptyUsers();
 
         AgentGroupResponse resp = agentGroupImpl.getGroup(10L, 1L);
 
@@ -108,7 +111,7 @@ class AgentGroupImplTest {
         AgentGroup g2 = buildGroup(2L, "Group B", 5L);
         when(groupRepo.findByAdminId(5L)).thenReturn(List.of(g1, g2));
         when(agentRepo.findByGroupId(anyLong())).thenReturn(List.of());
-        when(userJpaRepository.findAllById(any())).thenReturn(List.of());
+        stubEmptyUsers();
 
         List<AgentGroupResponse> result = agentGroupImpl.listGroupsByAdmin(5L);
 
@@ -134,7 +137,7 @@ class AgentGroupImplTest {
         when(groupRepo.findByIdAndAdminId(10L, 1L)).thenReturn(Optional.of(group));
         when(groupRepo.save(any())).thenReturn(buildGroup(10L, "New Name", 1L));
         when(agentRepo.findByGroupId(10L)).thenReturn(List.of());
-        when(userJpaRepository.findAllById(any())).thenReturn(List.of());
+        stubEmptyUsers();
 
         AgentGroupResponse resp = agentGroupImpl.updateGroup(10L, "New Name", "new desc", 1L);
 
@@ -180,12 +183,8 @@ class AgentGroupImplTest {
         when(groupRepo.findByIdAndAdminId(10L, 1L)).thenReturn(Optional.of(group));
         when(agentRepo.findById(20L)).thenReturn(Optional.of(agent));
         when(agentRepo.save(any())).thenReturn(agent);
-
-        // getGroup called at the end
-        when(groupRepo.findByIdAndAdminId(10L, 1L)).thenReturn(Optional.of(group));
         when(agentRepo.findByGroupId(10L)).thenReturn(List.of(agent));
-        UserEntity userEntity = buildUserEntity(100L, "Agent One");
-        when(userJpaRepository.findAllById(List.of(100L))).thenReturn(List.of(userEntity));
+        when(userRepo.findAllById(List.of(100L))).thenReturn(List.of(buildUser(100L, "Agent One")));
 
         AgentGroupResponse resp = agentGroupImpl.assignAgentToGroup(10L, 20L, 1L);
 
@@ -214,9 +213,8 @@ class AgentGroupImplTest {
         when(groupRepo.findByIdAndAdminId(10L, 1L)).thenReturn(Optional.of(group));
         when(agentRepo.findById(20L)).thenReturn(Optional.of(agent));
         when(agentRepo.save(any())).thenReturn(agent);
-
         when(agentRepo.findByGroupId(10L)).thenReturn(List.of());
-        when(userJpaRepository.findAllById(any())).thenReturn(List.of());
+        stubEmptyUsers();
 
         agentGroupImpl.removeAgentFromGroup(10L, 20L, 1L);
 

@@ -6,6 +6,7 @@ import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.models.AgentGoal;
 import com.monitor.call.domain.models.AgentGoalHistory;
 import com.monitor.call.domain.models.CallTypification;
+import com.monitor.call.domain.exceptions.NotFoundException;
 import com.monitor.call.domain.ports.in.AgentGoalUseCases;
 import com.monitor.call.domain.ports.out.AgentGoalRepositoryPort;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
@@ -70,7 +71,7 @@ public class AgentGoalImpl implements AgentGoalUseCases {
     public AgentGoalResponse updateGoal(Long goalId, Double targetValue, Long adminId) {
         AgentGoal goal = goalRepo.findById(goalId)
                 .filter(g -> g.getAdminId().equals(adminId))
-                .orElseThrow(() -> new RuntimeException("Meta no encontrada: " + goalId));
+                .orElseThrow(() -> new NotFoundException("Meta no encontrada: " + goalId));
         goal.setTargetValue(targetValue);
         AgentGoal saved = goalRepo.save(goal);
         logger.info("Meta actualizada: goalId={} targetValue={}", goalId, targetValue);
@@ -81,7 +82,7 @@ public class AgentGoalImpl implements AgentGoalUseCases {
     public void deactivateGoal(Long goalId, Long adminId) {
         AgentGoal goal = goalRepo.findById(goalId)
                 .filter(g -> g.getAdminId().equals(adminId))
-                .orElseThrow(() -> new RuntimeException("Meta no encontrada: " + goalId));
+                .orElseThrow(() -> new NotFoundException("Meta no encontrada: " + goalId));
         goal.setActive(false);
         goalRepo.save(goal);
         logger.info("Meta desactivada: goalId={}", goalId);
@@ -134,7 +135,7 @@ public class AgentGoalImpl implements AgentGoalUseCases {
     @Override
     public List<GoalProgressResponse> getMyGoals(Long agentId, Long adminId) {
         Agent agent = agentRepo.findById(agentId)
-                .orElseThrow(() -> new RuntimeException("Agente no encontrado: " + agentId));
+                .orElseThrow(() -> new NotFoundException("Agente no encontrado: " + agentId));
 
         List<AgentGoal> goals = goalRepo.findActiveGoalsForAgent(adminId, agentId);
         List<GoalProgressResponse> result = new ArrayList<>();

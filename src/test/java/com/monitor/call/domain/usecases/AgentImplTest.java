@@ -1,12 +1,12 @@
 package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.models.Agent;
+import com.monitor.call.domain.models.License;
 import com.monitor.call.domain.models.User;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
+import com.monitor.call.domain.ports.out.LicenseRepositoryPort;
 import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.AgentResponse;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.UserEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,7 +26,7 @@ class AgentImplTest {
 
     @Mock private AgentRepositoryPort agentRepo;
     @Mock private UserRepositoryPort userRepo;
-    @Mock private UserJpaRepository userJpaRepo;
+    @Mock private LicenseRepositoryPort licenseRepo;
     @Mock private PasswordEncoder passwordEncoder;
 
     @InjectMocks
@@ -42,13 +42,9 @@ class AgentImplTest {
         return User.builder().id(id).name(name).email(email).active(true).build();
     }
 
-    private UserEntity buildUserEntity(Long id, String name, String email) {
-        return UserEntity.builder().id(id).name(name).email(email).password("hash").active(true).build();
-    }
-
-    private void stubUserJpaForAgent(Agent agent, String name) {
-        when(userJpaRepo.findAllById(List.of(agent.getUserId())))
-                .thenReturn(List.of(buildUserEntity(agent.getUserId(), name, name + "@test.com")));
+    private void stubUserForAgent(Long userId, String name) {
+        when(userRepo.findById(userId)).thenReturn(
+                Optional.of(buildUser(userId, name, name + "@test.com")));
     }
 
     // ─── createAgent ─────────────────────────────────────────────────────────
@@ -57,6 +53,7 @@ class AgentImplTest {
     void createAgent_newEmailAndExtension_savesUserAndAgent() {
         when(userRepo.existsByEmail("ana@test.com")).thenReturn(false);
         when(agentRepo.existsByExtension("1001")).thenReturn(false);
+        when(licenseRepo.findByAdminId(1L)).thenReturn(Optional.empty());
         when(passwordEncoder.encode(any())).thenReturn("hashed");
 
         User savedUser = buildUser(10L, "Ana", "ana@test.com");
@@ -64,8 +61,7 @@ class AgentImplTest {
 
         Agent savedAgent = buildAgent(20L, 10L, "1001");
         when(agentRepo.save(any())).thenReturn(savedAgent);
-        when(userJpaRepo.findAllById(List.of(10L)))
-                .thenReturn(List.of(buildUserEntity(10L, "Ana", "ana@test.com")));
+        when(userRepo.findById(10L)).thenReturn(Optional.of(savedUser));
 
         AgentResponse resp = agentImpl.createAgent("Ana", "ana@test.com", "1001", null, 1L);
 
@@ -93,9 +89,23 @@ class AgentImplTest {
 
         assertThatThrownBy(() -> agentImpl.createAgent("New", "new@test.com", "1001", null, 1L))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("extension");
+                .hasMessageContaining("uso");
 
         verify(userRepo, never()).save(any());
+    }
+
+    @Test
+    void createAgent_licenseLimit_throwsRuntimeException() {
+        when(userRepo.existsByEmail("x@test.com")).thenReturn(false);
+        when(agentRepo.existsByExtension("1001")).thenReturn(false);
+        when(licenseRepo.findByAdminId(1L)).thenReturn(Optional.of(
+                License.builder().maxAgents(2).build()));
+        when(agentRepo.findByAdminId(1L)).thenReturn(List.of(
+                buildAgent(1L, 10L, "100"), buildAgent(2L, 11L, "101")));
+
+        assertThatThrownBy(() -> agentImpl.createAgent("X", "x@test.com", "1001", null, 1L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("AGENT_LIMIT_REACHED");
     }
 
     // ─── getAgent ─────────────────────────────────────────────────────────────
@@ -104,8 +114,7 @@ class AgentImplTest {
     void getAgent_exists_returnsResponse() {
         Agent agent = buildAgent(10L, 100L, "1001");
         when(agentRepo.findById(10L)).thenReturn(Optional.of(agent));
-        when(userJpaRepo.findAllById(List.of(100L)))
-                .thenReturn(List.of(buildUserEntity(100L, "Ana", "ana@test.com")));
+        stubUserForAgent(100L, "Ana");
 
         AgentResponse resp = agentImpl.getAgent(10L);
 
@@ -128,8 +137,7 @@ class AgentImplTest {
     void getAgentByExtension_exists_returnsResponse() {
         Agent agent = buildAgent(10L, 100L, "1001");
         when(agentRepo.findByExtension("1001")).thenReturn(Optional.of(agent));
-        when(userJpaRepo.findAllById(List.of(100L)))
-                .thenReturn(List.of(buildUserEntity(100L, "Ana", "ana@test.com")));
+        stubUserForAgent(100L, "Ana");
 
         AgentResponse resp = agentImpl.getAgentByExtension("1001");
 
@@ -152,9 +160,9 @@ class AgentImplTest {
         Agent a1 = buildAgent(1L, 10L, "1001");
         Agent a2 = buildAgent(2L, 11L, "1002");
         when(agentRepo.findByGroupId(5L)).thenReturn(List.of(a1, a2));
-        when(userJpaRepo.findAllById(List.of(10L, 11L))).thenReturn(List.of(
-                buildUserEntity(10L, "Ana", "ana@test.com"),
-                buildUserEntity(11L, "Bob", "bob@test.com")));
+        when(userRepo.findAllById(anyList())).thenReturn(List.of(
+                buildUser(10L, "Ana", "ana@test.com"),
+                buildUser(11L, "Bob", "bob@test.com")));
 
         List<AgentResponse> result = agentImpl.listAgentsByGroup(5L);
 
@@ -164,7 +172,6 @@ class AgentImplTest {
     @Test
     void listAgentsByGroup_empty_returnsEmptyList() {
         when(agentRepo.findByGroupId(5L)).thenReturn(List.of());
-        when(userJpaRepo.findAllById(List.of())).thenReturn(List.of());
 
         List<AgentResponse> result = agentImpl.listAgentsByGroup(5L);
 
@@ -177,8 +184,8 @@ class AgentImplTest {
     void listAgentsByAdmin_returnsAgentsForAdmin() {
         Agent agent = buildAgent(1L, 10L, "1001");
         when(agentRepo.findByAdminId(1L)).thenReturn(List.of(agent));
-        when(userJpaRepo.findAllById(List.of(10L)))
-                .thenReturn(List.of(buildUserEntity(10L, "Ana", "ana@test.com")));
+        when(userRepo.findAllById(anyList()))
+                .thenReturn(List.of(buildUser(10L, "Ana", "ana@test.com")));
 
         List<AgentResponse> result = agentImpl.listAgentsByAdmin(1L);
 
@@ -193,12 +200,11 @@ class AgentImplTest {
         when(agentRepo.findById(10L)).thenReturn(Optional.of(agent));
         when(agentRepo.save(any())).thenReturn(agent);
         when(userRepo.findById(100L)).thenReturn(Optional.of(buildUser(100L, "Old", "old@test.com")));
-        when(userJpaRepo.findAllById(List.of(100L)))
-                .thenReturn(List.of(buildUserEntity(100L, "New Name", "old@test.com")));
+        when(userRepo.save(any())).thenReturn(buildUser(100L, "New Name", "old@test.com"));
 
         AgentResponse resp = agentImpl.updateAgent(10L, "New Name", "1001", 1L);
 
-        verify(userRepo).save(any()); // name updated
+        verify(userRepo).save(any());
         verify(agentRepo).save(any());
         assertThat(resp).isNotNull();
     }
@@ -210,8 +216,7 @@ class AgentImplTest {
         when(agentRepo.existsByExtension("1002")).thenReturn(false);
         when(agentRepo.save(any())).thenReturn(agent);
         when(userRepo.findById(100L)).thenReturn(Optional.of(buildUser(100L, "Ana", "ana@test.com")));
-        when(userJpaRepo.findAllById(List.of(100L)))
-                .thenReturn(List.of(buildUserEntity(100L, "Ana", "ana@test.com")));
+        when(userRepo.save(any())).thenReturn(buildUser(100L, "Ana", "ana@test.com"));
 
         agentImpl.updateAgent(10L, "Ana", "1002", 1L);
 
@@ -226,7 +231,7 @@ class AgentImplTest {
 
         assertThatThrownBy(() -> agentImpl.updateAgent(10L, "Ana", "1002", 1L))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("extension");
+                .hasMessageContaining("uso");
     }
 
     @Test

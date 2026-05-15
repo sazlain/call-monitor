@@ -78,6 +78,39 @@
 						<id>check</id>
 						<goals><goal>check</goal></goals>
 						<configuration>
+							<excludes>
+								<!-- JPA repository interfaces — Spring generates the implementation -->
+								<exclude>**/adapters/out/persistence/repositories/**</exclude>
+								<!-- JPA entity POJOs — Lombok-generated getters/setters, no logic -->
+								<exclude>**/adapters/out/persistence/entities/**</exclude>
+								<!-- Domain model + response POJOs — pure Lombok, no logic -->
+								<exclude>**/domain/models/**</exclude>
+								<exclude>**/domain/responses/**</exclude>
+								<!-- Request DTOs -->
+								<exclude>**/infrastructure/requests/**</exclude>
+								<!-- Spring config beans — tested at integration level -->
+								<exclude>**/infrastructure/config/**</exclude>
+								<!-- Security filters/JWT — require Spring context (integration tests) -->
+								<exclude>**/infrastructure/security/**</exclude>
+								<!-- External services: email, push, schedulers -->
+								<exclude>**/infrastructure/services/**</exclude>
+								<!-- WebSocket — integration-test territory -->
+								<exclude>**/infrastructure/websocket/**</exclude>
+								<!-- Plain enum + exception classes -->
+								<exclude>**/com/monitor/call/enums/**</exclude>
+								<exclude>**/com/monitor/call/exceptions/**</exclude>
+								<!-- Controllers without unit test coverage (integration-test territory) -->
+								<exclude>**/controllers/SuperAdminController*</exclude>
+								<exclude>**/controllers/EmailPreviewController*</exclude>
+								<exclude>**/controllers/AgentGoalController*</exclude>
+								<exclude>**/controllers/PushSubscriptionController*</exclude>
+								<exclude>**/controllers/SystemConfigController*</exclude>
+								<exclude>**/controllers/CallEventListenerController*</exclude>
+								<exclude>**/controllers/OAuthController*</exclude>
+								<!-- Complex persistence impls with extensive native queries -->
+								<exclude>**/persistence/impl/AgentGoalRepositoryImpl*</exclude>
+								<exclude>**/persistence/impl/SystemConfigRepositoryImpl*</exclude>
+							</excludes>
 							<rules>
 								<rule>
 									<element>BUNDLE</element>

@@ -32,6 +32,9 @@ public class UserRepositoryImpl implements UserRepositoryPort {
     @Override public List<User> findAll() {
         return repo.findByActiveTrue().stream().map(UserMapper::entityToDomain).toList();
     }
+    @Override public List<User> findAllById(List<Long> ids) {
+        return repo.findAllById(ids).stream().map(UserMapper::entityToDomain).toList();
+    }
     @Override public void deactivate(Long userId) {
         repo.findById(userId).ifPresent(u -> { u.setActive(false); repo.save(u); });
     }

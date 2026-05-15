@@ -151,6 +151,10 @@ public class ScheduledAlertService {
             String html = emailTemplates.dailySummary(date, agentRows, totalCalls, totalAnswered, durationMinutes);
 
             emailService.send(admin.getEmail(), "Resumen diario — Voxio", html);
+            pushService.sendToAll(pushRepo.findByUserId(admin.getId()),
+                    "Resumen del día",
+                    totalCalls + " llamadas — " + totalAnswered + " contestadas en " + durationMinutes + " min",
+                    "/pwa-192x192.png", "/dashboard/admin");
             logger.info("Resumen diario enviado a admin={}", admin.getId());
         }
     }
@@ -196,6 +200,10 @@ public class ScheduledAlertService {
 
             emailService.send(admin.getEmail(),
                     "Alerta: " + adminUnmet.size() + " metas sin cumplir", html);
+            pushService.sendToAll(pushRepo.findByUserId(admin.getId()),
+                    "Metas sin cumplir: " + adminUnmet.size(),
+                    "Revisa el rendimiento de tus agentes",
+                    "/pwa-192x192.png", "/admin/goals");
             logger.info("Alerta metas no cumplidas enviada a admin={} cantidad={}", admin.getId(), adminUnmet.size());
         }
     }

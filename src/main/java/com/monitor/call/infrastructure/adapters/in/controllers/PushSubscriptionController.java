@@ -6,6 +6,7 @@ import com.monitor.call.infrastructure.requests.PushSubscriptionRequest;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,7 +39,7 @@ public class PushSubscriptionController {
     @PostMapping("/subscribe")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Registra la suscripción push del usuario autenticado")
-    public ResponseEntity<Void> subscribe(@RequestBody PushSubscriptionRequest req,
+    public ResponseEntity<Void> subscribe(@Valid @RequestBody PushSubscriptionRequest req,
                                           @RequestHeader("Authorization") String auth) {
         Long userId = jwtUtil.extractUserId(auth.substring(7));
         pushRepo.findByUserIdAndEndpoint(userId, req.getEndpoint())
@@ -61,7 +62,7 @@ public class PushSubscriptionController {
     @DeleteMapping("/unsubscribe")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Elimina la suscripción push del usuario autenticado")
-    public ResponseEntity<Void> unsubscribe(@RequestBody PushSubscriptionRequest req,
+    public ResponseEntity<Void> unsubscribe(@Valid @RequestBody PushSubscriptionRequest req,
                                             @RequestHeader("Authorization") String auth) {
         Long userId = jwtUtil.extractUserId(auth.substring(7));
         pushRepo.deleteByUserIdAndEndpoint(userId, req.getEndpoint());

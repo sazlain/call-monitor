@@ -1,12 +1,15 @@
 package com.monitor.call.domain.usecases;
 
+import com.monitor.call.domain.exceptions.ConflictException;
+import com.monitor.call.domain.exceptions.NotFoundException;
+import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.models.AgentGroup;
 import com.monitor.call.domain.ports.in.AgentGroupUseCases;
 import com.monitor.call.domain.ports.out.AgentGroupRepositoryPort;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
+import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.AgentGroupResponse;
 import com.monitor.call.domain.responses.AgentResponse;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.mappers.AgentMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,21 +27,21 @@ public class AgentGroupImpl implements AgentGroupUseCases {
 
     private final AgentGroupRepositoryPort groupRepo;
     private final AgentRepositoryPort agentRepo;
-    private final UserJpaRepository userJpaRepository;
+    private final UserRepositoryPort userRepo;
 
     public AgentGroupImpl(AgentGroupRepositoryPort groupRepo,
                           AgentRepositoryPort agentRepo,
-                          UserJpaRepository userJpaRepository) {
+                          UserRepositoryPort userRepo) {
         this.groupRepo = groupRepo;
         this.agentRepo = agentRepo;
-        this.userJpaRepository = userJpaRepository;
+        this.userRepo  = userRepo;
     }
 
     @Override
     @Transactional
     public AgentGroupResponse createGroup(String name, String description, Long adminId) {
         if (groupRepo.existsByNameAndAdminId(name, adminId))
-            throw new RuntimeException("Ya existe un grupo con ese nombre");
+            throw new ConflictException("Ya existe un grupo con ese nombre");
 
         AgentGroup group = AgentGroup.builder()
                 .name(name).description(description)
@@ -52,7 +55,7 @@ public class AgentGroupImpl implements AgentGroupUseCases {
     @Override
     public AgentGroupResponse getGroup(Long groupId, Long adminId) {
         AgentGroup group = groupRepo.findByIdAndAdminId(groupId, adminId)
-                .orElseThrow(() -> new RuntimeException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
         return toResponse(group);
     }
 
@@ -66,7 +69,7 @@ public class AgentGroupImpl implements AgentGroupUseCases {
     @Transactional
     public AgentGroupResponse updateGroup(Long groupId, String name, String description, Long adminId) {
         AgentGroup group = groupRepo.findByIdAndAdminId(groupId, adminId)
-                .orElseThrow(() -> new RuntimeException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
         group.setName(name);
         group.setDescription(description);
         return toResponse(groupRepo.save(group));
@@ -76,7 +79,7 @@ public class AgentGroupImpl implements AgentGroupUseCases {
     @Transactional
     public void deactivateGroup(Long groupId, Long adminId) {
         groupRepo.findByIdAndAdminId(groupId, adminId)
-                .orElseThrow(() -> new RuntimeException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
         groupRepo.deactivate(groupId);
         logger.info("Grupo desactivado: {} por admin {}", groupId, adminId);
     }
@@ -85,10 +88,10 @@ public class AgentGroupImpl implements AgentGroupUseCases {
     @Transactional
     public AgentGroupResponse assignAgentToGroup(Long groupId, Long agentId, Long adminId) {
         groupRepo.findByIdAndAdminId(groupId, adminId)
-                .orElseThrow(() -> new RuntimeException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
 
-        var agent = agentRepo.findById(agentId)
-                .orElseThrow(() -> new RuntimeException("Agente no encontrado"));
+        Agent agent = agentRepo.findById(agentId)
+                .orElseThrow(() -> new NotFoundException("Agente no encontrado"));
 
         agent.setGroupId(groupId);
         agentRepo.save(agent);
@@ -101,10 +104,10 @@ public class AgentGroupImpl implements AgentGroupUseCases {
     @Transactional
     public AgentGroupResponse removeAgentFromGroup(Long groupId, Long agentId, Long adminId) {
         groupRepo.findByIdAndAdminId(groupId, adminId)
-                .orElseThrow(() -> new RuntimeException("Grupo no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Grupo no encontrado"));
 
-        var agent = agentRepo.findById(agentId)
-                .orElseThrow(() -> new RuntimeException("Agente no encontrado"));
+        Agent agent = agentRepo.findById(agentId)
+                .orElseThrow(() -> new NotFoundException("Agente no encontrado"));
 
         agent.setGroupId(null);
         agentRepo.save(agent);
@@ -112,15 +115,21 @@ public class AgentGroupImpl implements AgentGroupUseCases {
     }
 
     private AgentGroupResponse toResponse(AgentGroup group) {
-        List<com.monitor.call.domain.models.Agent> agents =
-                group.getId() != null ? agentRepo.findByGroupId(group.getId()) : List.of();
+        List<Agent> agents = group.getId() != null
+                ? agentRepo.findByGroupId(group.getId()) : List.of();
 
-        var userIds = agents.stream().map(a -> a.getUserId()).toList();
-        var userMap = userJpaRepository.findAllById(userIds).stream()
+        List<Long> userIds = agents.stream().map(Agent::getUserId).toList();
+        Map<Long, com.monitor.call.domain.models.User> userMap = userRepo.findAllById(userIds).stream()
                 .collect(Collectors.toMap(u -> u.getId(), u -> u));
 
         List<AgentResponse> agentResponses = agents.stream()
-                .map(a -> AgentMapper.domainToResponse(a, userMap)).toList();
+                .map(a -> {
+                    var u = userMap.get(a.getUserId());
+                    return AgentMapper.domainToResponseWithName(a,
+                            u != null ? u.getName() : "Desconocido",
+                            u != null ? u.getEmail() : "");
+                })
+                .toList();
 
         return AgentGroupResponse.builder()
                 .id(group.getId()).name(group.getName())

@@ -1,5 +1,6 @@
 package com.monitor.call.infrastructure.adapters.out.persistence.impl;
 
+import com.monitor.call.domain.exceptions.NotFoundException;
 import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
@@ -30,11 +31,14 @@ public class AgentRepositoryImpl implements AgentRepositoryPort {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /** Convierte entidad a dominio enriqueciendo con el nombre del usuario asociado. */
+    /** Convierte entidad a dominio enriqueciendo con datos del usuario asociado. */
     private Agent toModel(AgentEntity e) {
         Agent agent = AgentMapper.entityToDomain(e);
         if (e.getUserId() != null) {
-            userRepo.findById(e.getUserId()).ifPresent(u -> agent.setUserName(u.getName()));
+            userRepo.findById(e.getUserId()).ifPresent(u -> {
+                agent.setUserName(u.getName());
+                agent.setUserEmail(u.getEmail());
+            });
         }
         return agent;
     }
@@ -46,7 +50,7 @@ public class AgentRepositoryImpl implements AgentRepositoryPort {
         AgentEntity entity = AgentMapper.domainToEntity(agent);
         if (agent.getGroupId() != null) {
             AgentGroupEntity group = groupRepo.findById(agent.getGroupId())
-                    .orElseThrow(() -> new RuntimeException("Grupo no encontrado: " + agent.getGroupId()));
+                    .orElseThrow(() -> new NotFoundException("Grupo no encontrado: " + agent.getGroupId()));
             entity.setGroup(group);
         }
         return toModel(agentRepo.save(entity));

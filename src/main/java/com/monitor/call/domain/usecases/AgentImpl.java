@@ -4,12 +4,13 @@ import com.monitor.call.domain.enums.Role;
 import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.models.User;
 import com.monitor.call.domain.ports.in.AgentUseCases;
+import com.monitor.call.domain.exceptions.BusinessRuleException;
+import com.monitor.call.domain.exceptions.ConflictException;
+import com.monitor.call.domain.exceptions.NotFoundException;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
+import com.monitor.call.domain.ports.out.LicenseRepositoryPort;
 import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.AgentResponse;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.LicenseEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LicenseJpaRepository;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.mappers.AgentMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,18 +31,17 @@ public class AgentImpl implements AgentUseCases {
 
     private final AgentRepositoryPort agentRepo;
     private final UserRepositoryPort userRepo;
-    private final UserJpaRepository userJpaRepo;
+    private final LicenseRepositoryPort licenseRepo;
     private final PasswordEncoder passwordEncoder;
-    private final LicenseJpaRepository licenseRepo;
 
-    public AgentImpl(AgentRepositoryPort agentRepo, UserRepositoryPort userRepo,
-                     UserJpaRepository userJpaRepo, PasswordEncoder passwordEncoder,
-                     LicenseJpaRepository licenseRepo) {
+    public AgentImpl(AgentRepositoryPort agentRepo,
+                     UserRepositoryPort userRepo,
+                     LicenseRepositoryPort licenseRepo,
+                     PasswordEncoder passwordEncoder) {
         this.agentRepo = agentRepo;
         this.userRepo = userRepo;
-        this.userJpaRepo = userJpaRepo;
-        this.passwordEncoder = passwordEncoder;
         this.licenseRepo = licenseRepo;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -49,22 +49,20 @@ public class AgentImpl implements AgentUseCases {
     public AgentResponse createAgent(String name, String email, String extension,
                                      Long groupId, Long adminId) {
         if (userRepo.existsByEmail(email))
-            throw new RuntimeException("El email ya esta registrado");
+            throw new ConflictException("El email ya esta registrado");
         if (agentRepo.existsByExtension(extension))
-            throw new RuntimeException("La extensión " + extension + " ya está en uso por otro agente");
+            throw new ConflictException("La extensión " + extension + " ya está en uso por otro agente");
 
-        // Verificar límite de agentes según licencia
         if (adminId != null) {
-            LicenseEntity license = licenseRepo.findByAdminId(adminId).orElse(null);
-            if (license != null) {
+            licenseRepo.findByAdminId(adminId).ifPresent(license -> {
                 int current = agentRepo.findByAdminId(adminId).size();
                 if (current >= license.getMaxAgents()) {
-                    throw new RuntimeException("AGENT_LIMIT_REACHED: límite de " + license.getMaxAgents() + " agentes alcanzado para este plan");
+                    throw new BusinessRuleException("AGENT_LIMIT_REACHED: límite de "
+                            + license.getMaxAgents() + " agentes alcanzado para este plan");
                 }
-            }
+            });
         }
 
-        // 1. Crear usuario con contrasena temporal y roles CALL_AGENT
         String tempPassword = UUID.randomUUID().toString().substring(0, 10);
         User user = User.builder()
                 .name(name).email(email)
@@ -75,7 +73,6 @@ public class AgentImpl implements AgentUseCases {
                 .build();
         User savedUser = userRepo.save(user);
 
-        // 2. Crear agente vinculado al usuario
         Agent agent = Agent.builder()
                 .userId(savedUser.getId())
                 .extension(extension)
@@ -84,7 +81,6 @@ public class AgentImpl implements AgentUseCases {
         Agent savedAgent = agentRepo.save(agent);
 
         logger.info("Agente creado: extension={} email={} contrasena_temp={}", extension, email, tempPassword);
-        // TODO: enviar email con contrasena temporal al agente
 
         return toResponse(savedAgent);
     }
@@ -117,14 +113,13 @@ public class AgentImpl implements AgentUseCases {
     @Transactional
     public AgentResponse updateAgent(Long agentId, String name, String extension, Long adminId) {
         Agent agent = agentRepo.findById(agentId)
-                .orElseThrow(() -> new RuntimeException("Agente no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Agente no encontrado"));
 
         if (!agent.getExtension().equals(extension) && agentRepo.existsByExtension(extension))
-            throw new RuntimeException("La extensión " + extension + " ya está en uso por otro agente");
+            throw new ConflictException("La extensión " + extension + " ya está en uso por otro agente");
 
         agent.setExtension(extension);
 
-        // Actualizar nombre en el usuario
         userRepo.findById(agent.getUserId()).ifPresent(u -> {
             u.setName(name);
             userRepo.save(u);
@@ -137,21 +132,28 @@ public class AgentImpl implements AgentUseCases {
     @Transactional
     public void deactivateAgent(Long agentId, Long adminId) {
         agentRepo.findById(agentId)
-                .orElseThrow(() -> new RuntimeException("Agente no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Agente no encontrado"));
         agentRepo.deactivate(agentId);
         logger.info("Agente desactivado: {}", agentId);
     }
 
     private AgentResponse toResponse(Agent agent) {
-        var userMap = userJpaRepo.findAllById(List.of(agent.getUserId())).stream()
-                .collect(Collectors.toMap(u -> u.getId(), u -> u));
-        return AgentMapper.domainToResponse(agent, userMap);
+        return userRepo.findById(agent.getUserId())
+                .map(u -> AgentMapper.domainToResponseWithName(agent, u.getName(), u.getEmail()))
+                .orElse(AgentMapper.domainToResponseWithName(agent, "Desconocido", ""));
     }
 
     private List<AgentResponse> toResponseList(List<Agent> agents) {
-        var userIds = agents.stream().map(Agent::getUserId).toList();
-        var userMap = userJpaRepo.findAllById(userIds).stream()
-                .collect(Collectors.toMap(u -> u.getId(), u -> u));
-        return agents.stream().map(a -> AgentMapper.domainToResponse(a, userMap)).toList();
+        List<Long> userIds = agents.stream().map(Agent::getUserId).toList();
+        Map<Long, User> userMap = userRepo.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        return agents.stream()
+                .map(a -> {
+                    User u = userMap.get(a.getUserId());
+                    return AgentMapper.domainToResponseWithName(a,
+                            u != null ? u.getName() : "Desconocido",
+                            u != null ? u.getEmail() : "");
+                })
+                .toList();
     }
 }

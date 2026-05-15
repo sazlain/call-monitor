@@ -1,5 +1,6 @@
 package com.monitor.call.domain.usecases;
 
+import com.monitor.call.domain.exceptions.BusinessRuleException;
 import com.monitor.call.domain.models.CallEvent;
 import com.monitor.call.domain.models.CallTypification;
 import com.monitor.call.domain.models.Lead;
@@ -299,7 +300,7 @@ public class ReportImpl implements ReportUseCases {
             }
             return out.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("Error generando CSV: " + e.getMessage(), e);
+            throw new BusinessRuleException("Error generando CSV: " + e.getMessage(), e);
         }
     }
 

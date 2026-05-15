@@ -1,5 +1,10 @@
 package com.monitor.call.infrastructure.exceptions;
 
+import com.monitor.call.domain.exceptions.BusinessRuleException;
+import com.monitor.call.domain.exceptions.ConflictException;
+import com.monitor.call.domain.exceptions.ForbiddenException;
+import com.monitor.call.domain.exceptions.NotFoundException;
+import com.monitor.call.domain.exceptions.UnauthorizedException;
 import com.monitor.call.exceptions.CallMonitorException;
 import com.monitor.call.exceptions.ErrorResponse;
 import org.junit.jupiter.api.Test;
@@ -112,6 +117,92 @@ class GlobalExceptionHandlerTest {
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
         assertThat(resp.getBody().getId()).isEqualTo("ERR413");
         assertThat(resp.getBody().getMessage()).contains("50MB");
+    }
+
+    // ─── Typed domain exceptions ─────────────────────────────────────────────
+
+    @Test
+    void handleNotFound_returns404() {
+        NotFoundException ex = new NotFoundException("Agente no encontrado: 99");
+
+        ResponseEntity<ErrorResponse> resp = handler.handleNotFound(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(resp.getBody().getId()).isEqualTo("ERR404");
+        assertThat(resp.getBody().getMessage()).contains("Agente no encontrado");
+    }
+
+    @Test
+    void handleConflict_returns409() {
+        ConflictException ex = new ConflictException("El email ya esta registrado");
+
+        ResponseEntity<ErrorResponse> resp = handler.handleConflict(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(resp.getBody().getId()).isEqualTo("ERR409");
+        assertThat(resp.getBody().getMessage()).contains("email");
+    }
+
+    @Test
+    void handleUnauthorized_returns401() {
+        UnauthorizedException ex = new UnauthorizedException("Credenciales invalidas");
+
+        ResponseEntity<ErrorResponse> resp = handler.handleUnauthorized(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(resp.getBody().getId()).isEqualTo("ERR401");
+        assertThat(resp.getBody().getMessage()).contains("Credenciales");
+    }
+
+    @Test
+    void handleForbidden_accountDisabled_returnsHumanMessage() {
+        ForbiddenException ex = new ForbiddenException("ACCOUNT_DISABLED");
+
+        ResponseEntity<ErrorResponse> resp = handler.handleForbidden(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(resp.getBody().getMessage()).contains("desactivada");
+    }
+
+    @Test
+    void handleForbidden_licensePending_returnsHumanMessage() {
+        ForbiddenException ex = new ForbiddenException("LICENSE_PENDING");
+
+        ResponseEntity<ErrorResponse> resp = handler.handleForbidden(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(resp.getBody().getMessage()).contains("activada");
+    }
+
+    @Test
+    void handleForbidden_licenseExpired_returnsHumanMessage() {
+        ForbiddenException ex = new ForbiddenException("LICENSE_EXPIRED");
+
+        ResponseEntity<ErrorResponse> resp = handler.handleForbidden(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(resp.getBody().getMessage()).contains("vencido");
+    }
+
+    @Test
+    void handleForbidden_licenseSuspended_returnsHumanMessage() {
+        ForbiddenException ex = new ForbiddenException("LICENSE_SUSPENDED");
+
+        ResponseEntity<ErrorResponse> resp = handler.handleForbidden(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(resp.getBody().getMessage()).contains("suspendida");
+    }
+
+    @Test
+    void handleBusinessRule_returns422() {
+        BusinessRuleException ex = new BusinessRuleException("AGENT_LIMIT_REACHED: límite de 5 agentes");
+
+        ResponseEntity<ErrorResponse> resp = handler.handleBusinessRule(ex);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(resp.getBody().getId()).isEqualTo("ERR422");
+        assertThat(resp.getBody().getMessage()).contains("AGENT_LIMIT_REACHED");
     }
 
     // ─── RuntimeException ────────────────────────────────────────────────────

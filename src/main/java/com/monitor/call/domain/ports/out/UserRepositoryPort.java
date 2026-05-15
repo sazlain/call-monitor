@@ -9,6 +9,7 @@ public interface UserRepositoryPort {
     User save(User user);
     Optional<User> findByEmail(String email);
     Optional<User> findById(Long id);
+    List<User> findAllById(List<Long> ids);
     boolean existsByEmail(String email);
     List<User> findByRole(Role role);
     List<User> findAll();

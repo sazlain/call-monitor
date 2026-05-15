@@ -26,6 +26,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import com.monitor.call.domain.exceptions.ConflictException;
+import com.monitor.call.domain.exceptions.NotFoundException;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -115,10 +117,10 @@ public class SuperAdminController {
     @Operation(summary = "Crea un nuevo admin y le asigna un plan (licencia en estado PENDIENTE)")
     public ResponseEntity<AdminSummaryResponse> createAdmin(@RequestBody CreateAdminWithLicenseRequest req) {
         if (userRepo.findByEmail(req.getEmail()).isPresent())
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            throw new ConflictException("El email " + req.getEmail() + " ya existe en el sistema");
 
         LicensePlanEntity plan = planRepo.findById(req.getPlanId())
-                .orElseThrow(() -> new RuntimeException("Plan no encontrado: " + req.getPlanId()));
+                .orElseThrow(() -> new NotFoundException("Plan no encontrado: " + req.getPlanId()));
 
         UserEntity admin = userRepo.save(UserEntity.builder()
                 .name(req.getName())
@@ -202,7 +204,7 @@ public class SuperAdminController {
     public ResponseEntity<LicensePlanResponse> updatePlan(@PathVariable Long planId,
                                                            @RequestBody UpdatePlanRequest req) {
         LicensePlanEntity plan = planRepo.findById(planId)
-                .orElseThrow(() -> new RuntimeException("Plan no encontrado: " + planId));
+                .orElseThrow(() -> new NotFoundException("Plan no encontrado: " + planId));
         if (req.getName() != null)             plan.setName(req.getName());
         if (req.getDescription() != null)      plan.setDescription(req.getDescription());
         if (req.getDefaultMaxAgents() != null) plan.setDefaultMaxAgents(req.getDefaultMaxAgents());
@@ -216,7 +218,7 @@ public class SuperAdminController {
     @Operation(summary = "Desactiva un plan (borrado lógico, nunca se elimina físicamente)")
     public ResponseEntity<Void> deletePlan(@PathVariable Long planId) {
         LicensePlanEntity plan = planRepo.findById(planId)
-                .orElseThrow(() -> new RuntimeException("Plan no encontrado: " + planId));
+                .orElseThrow(() -> new NotFoundException("Plan no encontrado: " + planId));
         plan.setActive(false);
         planRepo.save(plan);
         return ResponseEntity.noContent().build();
@@ -235,7 +237,7 @@ public class SuperAdminController {
     @Operation(summary = "Activa una licencia: registra fecha de inicio hoy y calcula vencimiento según el plan")
     public ResponseEntity<LicenseResponse> activateLicense(@PathVariable Long licenseId) {
         LicenseEntity license = licenseRepo.findById(licenseId)
-                .orElseThrow(() -> new RuntimeException("Licencia no encontrada"));
+                .orElseThrow(() -> new NotFoundException("Licencia no encontrada"));
 
         LicensePlanEntity plan = license.getPlanId() != null
                 ? planRepo.findById(license.getPlanId()).orElse(null)
@@ -257,7 +259,7 @@ public class SuperAdminController {
     public ResponseEntity<LicenseResponse> updateLicense(@PathVariable Long licenseId,
                                                           @RequestBody UpdateLicenseRequest req) {
         LicenseEntity license = licenseRepo.findById(licenseId)
-                .orElseThrow(() -> new RuntimeException("Licencia no encontrada"));
+                .orElseThrow(() -> new NotFoundException("Licencia no encontrada"));
 
         if (req.getPlanName() != null)       license.setPlanName(req.getPlanName());
         if (req.getMaxAgents() != null)      license.setMaxAgents(req.getMaxAgents());

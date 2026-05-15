@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStreamReader;
+import com.monitor.call.domain.exceptions.BusinessRuleException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -207,7 +208,7 @@ public class LeadController {
                         .build());
             }
         } catch (Exception e) {
-            throw new RuntimeException("Error al parsear CSV: " + e.getMessage());
+            throw new BusinessRuleException("Error al parsear CSV: " + e.getMessage());
         }
         return leads;
     }

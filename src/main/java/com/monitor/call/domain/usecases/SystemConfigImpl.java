@@ -1,5 +1,6 @@
 package com.monitor.call.domain.usecases;
 
+import com.monitor.call.domain.exceptions.NotFoundException;
 import com.monitor.call.domain.models.SystemConfig;
 import com.monitor.call.domain.ports.in.SystemConfigUseCases;
 import com.monitor.call.domain.ports.out.SystemConfigRepositoryPort;
@@ -30,7 +31,7 @@ public class SystemConfigImpl implements SystemConfigUseCases {
     public SystemConfigResponse getByKey(Long adminId, String key) {
         return repo.findByAdminIdAndKey(adminId, key)
                 .map(this::toResponse)
-                .orElseThrow(() -> new RuntimeException("Config no encontrada: " + key));
+                .orElseThrow(() -> new NotFoundException("Config no encontrada: " + key));
     }
 
     @Override

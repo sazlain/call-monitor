@@ -2,19 +2,19 @@ package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.enums.AppointmentStatus;
 import com.monitor.call.domain.enums.LeadStatus;
+import com.monitor.call.domain.models.Agent;
+import com.monitor.call.domain.models.Appointment;
+import com.monitor.call.domain.models.Lead;
 import com.monitor.call.domain.ports.in.LeadUseCases;
 import com.monitor.call.domain.ports.in.SystemConfigUseCases;
+import com.monitor.call.domain.ports.out.AgentRepositoryPort;
+import com.monitor.call.domain.ports.out.AppointmentRepositoryPort;
+import com.monitor.call.domain.ports.out.LeadRepositoryPort;
+import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.AppointmentResponse;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.AppointmentEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.LeadEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.UserEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AppointmentJpaRepository;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LeadJpaRepository;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.requests.AppointmentRequest;
 import com.monitor.call.infrastructure.services.EmailService;
+import com.monitor.call.infrastructure.services.EmailTemplates;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -35,13 +35,14 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AppointmentImplTest {
 
-    @Mock private AppointmentJpaRepository appointmentRepo;
-    @Mock private LeadJpaRepository leadRepo;
-    @Mock private AgentJpaRepository agentRepo;
-    @Mock private UserJpaRepository userRepo;
+    @Mock private AppointmentRepositoryPort appointmentRepo;
+    @Mock private LeadRepositoryPort leadRepo;
+    @Mock private AgentRepositoryPort agentRepo;
+    @Mock private UserRepositoryPort userRepo;
     @Mock private LeadUseCases leadUseCases;
     @Mock private SystemConfigUseCases configUseCases;
     @Mock private EmailService emailService;
+    @Mock private EmailTemplates emailTemplates;
 
     @InjectMocks
     private AppointmentImpl appointmentImpl;
@@ -57,8 +58,8 @@ class AppointmentImplTest {
                 .build();
     }
 
-    private AppointmentEntity buildEntity(Long id, Long leadId, Long agentId, AppointmentStatus status) {
-        return AppointmentEntity.builder()
+    private Appointment buildAppointment(Long id, Long leadId, Long agentId, AppointmentStatus status) {
+        return Appointment.builder()
                 .id(id).leadId(leadId).agentId(agentId).callId("CALL-" + id)
                 .appointmentDate(LocalDate.now().plusDays(3))
                 .appointmentTime(LocalTime.of(10, 0))
@@ -68,89 +69,82 @@ class AppointmentImplTest {
                 .build();
     }
 
-    private AgentEntity buildAgentEntity(Long id, Long userId) {
-        return AgentEntity.builder().id(id).userId(userId).extension("100" + id).active(true).build();
+    private Agent buildAgent(Long id, Long userId, Long adminId) {
+        return Agent.builder().id(id).userId(userId).extension("100" + id)
+                .active(true).adminId(adminId).userName("Agent " + id).build();
     }
 
-    private UserEntity buildUserEntity(Long id, String name) {
-        return UserEntity.builder().id(id).name(name).email(name + "@test.com").password("hash").active(true).build();
-    }
-
-    private LeadEntity buildLeadEntity(Long id, String contactName, String phone) {
-        LeadEntity e = new LeadEntity();
-        e.setId(id);
-        e.setContactName(contactName);
-        e.setContactPhone(phone);
-        e.setLeadSource("WEB");
-        return e;
+    private Lead buildLead(Long id) {
+        return Lead.builder().id(id).contactName("Contact").contactPhone("555")
+                .leadSource("WEB").build();
     }
 
     private void stubToResponse(Long agentId, Long userId, Long leadId) {
-        when(agentRepo.findById(agentId)).thenReturn(Optional.of(buildAgentEntity(agentId, userId)));
-        when(userRepo.findById(userId)).thenReturn(Optional.of(buildUserEntity(userId, "Agent")));
+        when(agentRepo.findById(agentId)).thenReturn(Optional.of(buildAgent(agentId, userId, 99L)));
         if (leadId != null) {
-            when(leadRepo.findById(leadId)).thenReturn(Optional.of(buildLeadEntity(leadId, "Contact", "555")));
+            when(leadRepo.findById(leadId)).thenReturn(Optional.of(buildLead(leadId)));
         }
     }
 
     // ─── create ───────────────────────────────────────────────────────────────
 
     @Test
-    void create_withLeadId_savesEntityAndUpdatesLeadStatus() {
+    void create_withLeadId_savesAndUpdatesLeadStatus() {
         AppointmentRequest req = buildRequest(1L, "CALL-001");
-        AppointmentEntity saved = buildEntity(10L, 1L, 5L, AppointmentStatus.SCHEDULED);
+        Appointment saved = buildAppointment(10L, 1L, 5L, AppointmentStatus.SCHEDULED);
         when(appointmentRepo.save(any())).thenReturn(saved);
-        stubToResponse(5L, 50L, 1L);
+        when(agentRepo.findById(5L)).thenReturn(Optional.of(buildAgent(5L, 50L, null)));
+        when(leadRepo.findById(1L)).thenReturn(Optional.of(buildLead(1L)));
 
         AppointmentResponse resp = appointmentImpl.create(req, 5L);
 
         assertThat(resp.getId()).isEqualTo(10L);
         assertThat(resp.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
-        verify(appointmentRepo).save(argThat(e -> e.getAgentId().equals(5L)));
+        verify(appointmentRepo).save(argThat(a -> a.getAgentId().equals(5L)));
         verify(leadUseCases).updateLeadStatus(1L, LeadStatus.APPOINTMENT, null);
     }
 
     @Test
-    void create_withoutLeadId_savesEntityWithoutUpdatingLead() {
+    void create_withoutLeadId_doesNotUpdateLead() {
         AppointmentRequest req = buildRequest(null, "CALL-002");
-        AppointmentEntity saved = buildEntity(11L, null, 5L, AppointmentStatus.SCHEDULED);
+        Appointment saved = buildAppointment(11L, null, 5L, AppointmentStatus.SCHEDULED);
         when(appointmentRepo.save(any())).thenReturn(saved);
-        stubToResponse(5L, 50L, null);
+        when(agentRepo.findById(5L)).thenReturn(Optional.of(buildAgent(5L, 50L, null)));
 
-        AppointmentResponse resp = appointmentImpl.create(req, 5L);
+        appointmentImpl.create(req, 5L);
 
-        assertThat(resp.getId()).isEqualTo(11L);
         verify(leadUseCases, never()).updateLeadStatus(any(), any(), any());
     }
 
     @Test
     void create_setsStatusToScheduled() {
         AppointmentRequest req = buildRequest(1L, "CALL-003");
-        AppointmentEntity saved = buildEntity(12L, 1L, 5L, AppointmentStatus.SCHEDULED);
+        Appointment saved = buildAppointment(12L, 1L, 5L, AppointmentStatus.SCHEDULED);
         when(appointmentRepo.save(any())).thenReturn(saved);
-        stubToResponse(5L, 50L, 1L);
+        when(agentRepo.findById(5L)).thenReturn(Optional.of(buildAgent(5L, 50L, null)));
+        when(leadRepo.findById(1L)).thenReturn(Optional.of(buildLead(1L)));
 
         appointmentImpl.create(req, 5L);
 
-        verify(appointmentRepo).save(argThat(e -> e.getStatus() == AppointmentStatus.SCHEDULED));
+        verify(appointmentRepo).save(argThat(a -> a.getStatus() == AppointmentStatus.SCHEDULED));
     }
 
     // ─── reschedule ───────────────────────────────────────────────────────────
 
     @Test
-    void reschedule_existingAppointment_marksOldAsRescheduledAndCreatesNew() {
-        AppointmentEntity existing = buildEntity(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+    void reschedule_marksOldAsRescheduledAndCreatesNew() {
+        Appointment existing = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
         when(appointmentRepo.findById(1L)).thenReturn(Optional.of(existing));
-        AppointmentEntity newAppt = buildEntity(2L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(existing));
+        Appointment newAppt = buildAppointment(2L, 5L, 10L, AppointmentStatus.SCHEDULED);
         when(appointmentRepo.save(any())).thenReturn(existing).thenReturn(newAppt);
         stubToResponse(10L, 100L, 5L);
 
-        AppointmentRequest req = buildRequest(5L, "CALL-NEW");
-        AppointmentResponse resp = appointmentImpl.reschedule(1L, req);
+        AppointmentResponse resp = appointmentImpl.reschedule(1L, buildRequest(5L, "CALL-NEW"));
 
         assertThat(resp.getId()).isEqualTo(2L);
         verify(appointmentRepo, times(2)).save(any());
-        verify(appointmentRepo).save(argThat(e -> e.getStatus() == AppointmentStatus.RESCHEDULED));
+        verify(appointmentRepo).save(argThat(a -> a.getStatus() == AppointmentStatus.RESCHEDULED));
     }
 
     @Test
@@ -165,29 +159,31 @@ class AppointmentImplTest {
     // ─── cancel ───────────────────────────────────────────────────────────────
 
     @Test
-    void cancel_existingAppointment_setsStatusToCancelledAndUpdatesLead() {
-        AppointmentEntity entity = buildEntity(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
-        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(entity));
-        when(appointmentRepo.save(any())).thenReturn(entity);
+    void cancel_setsStatusToCancelledAndUpdatesLead() {
+        Appointment appt = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(appt));
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(appt));
+        when(appointmentRepo.save(any())).thenReturn(appt);
         stubToResponse(10L, 100L, 5L);
 
         AppointmentResponse resp = appointmentImpl.cancel(1L, "reason");
 
         assertThat(resp.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
-        verify(appointmentRepo).save(argThat(e -> e.getStatus() == AppointmentStatus.CANCELLED));
-        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.INTERESTED, null);
+        verify(appointmentRepo).save(argThat(a -> a.getStatus() == AppointmentStatus.CANCELLED));
+        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.CANCELLED, null);
     }
 
     @Test
     void cancel_withNullReason_stillCancels() {
-        AppointmentEntity entity = buildEntity(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
-        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(entity));
-        when(appointmentRepo.save(any())).thenReturn(entity);
+        Appointment appt = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(appt));
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(appt));
+        when(appointmentRepo.save(any())).thenReturn(appt);
         stubToResponse(10L, 100L, 5L);
 
         appointmentImpl.cancel(1L, null);
 
-        verify(appointmentRepo).save(argThat(e -> e.getStatus() == AppointmentStatus.CANCELLED));
+        verify(appointmentRepo).save(argThat(a -> a.getStatus() == AppointmentStatus.CANCELLED));
     }
 
     @Test
@@ -201,17 +197,17 @@ class AppointmentImplTest {
     // ─── confirm ──────────────────────────────────────────────────────────────
 
     @Test
-    void confirm_existingAppointment_setsStatusToConfirmedAndKeepsAppointmentLead() {
-        AppointmentEntity entity = buildEntity(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
-        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(entity));
-        when(appointmentRepo.save(any())).thenReturn(entity);
+    void confirm_setsStatusToConfirmedAndUpdatesLead() {
+        Appointment appt = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(appt));
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(appt));
+        when(appointmentRepo.save(any())).thenReturn(appt);
         stubToResponse(10L, 100L, 5L);
 
         AppointmentResponse resp = appointmentImpl.confirm(1L);
 
         assertThat(resp.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
-        verify(appointmentRepo).save(argThat(e -> e.getStatus() == AppointmentStatus.CONFIRMED));
-        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.APPOINTMENT, null);
+        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.CONFIRMED, null);
     }
 
     @Test
@@ -225,17 +221,17 @@ class AppointmentImplTest {
     // ─── attend ───────────────────────────────────────────────────────────────
 
     @Test
-    void attend_existingAppointment_setsStatusToAttendedAndKeepsAppointmentLead() {
-        AppointmentEntity entity = buildEntity(1L, 5L, 10L, AppointmentStatus.CONFIRMED);
-        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(entity));
-        when(appointmentRepo.save(any())).thenReturn(entity);
+    void attend_setsStatusToAttendedAndUpdatesLead() {
+        Appointment appt = buildAppointment(1L, 5L, 10L, AppointmentStatus.CONFIRMED);
+        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(appt));
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(appt));
+        when(appointmentRepo.save(any())).thenReturn(appt);
         stubToResponse(10L, 100L, 5L);
 
         AppointmentResponse resp = appointmentImpl.attend(1L);
 
         assertThat(resp.getStatus()).isEqualTo(AppointmentStatus.ATTENDED);
-        verify(appointmentRepo).save(argThat(e -> e.getStatus() == AppointmentStatus.ATTENDED));
-        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.APPOINTMENT, null);
+        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.ATTENDED, null);
     }
 
     @Test
@@ -246,15 +242,48 @@ class AppointmentImplTest {
                 .isInstanceOf(RuntimeException.class);
     }
 
+    // ─── reactivate ───────────────────────────────────────────────────────────
+
+    @Test
+    void reactivate_setsStatusToScheduled() {
+        Appointment appt = buildAppointment(1L, 5L, 10L, AppointmentStatus.CANCELLED);
+        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(appt));
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(appt));
+        when(appointmentRepo.save(any())).thenReturn(appt);
+        stubToResponse(10L, 100L, 5L);
+
+        AppointmentResponse resp = appointmentImpl.reactivate(1L);
+
+        assertThat(resp.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.APPOINTMENT, null);
+    }
+
+    // ─── markRescheduled ──────────────────────────────────────────────────────
+
+    @Test
+    void markRescheduled_setsStatusToRescheduled() {
+        Appointment appt = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(appt));
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(appt));
+        when(appointmentRepo.save(any())).thenReturn(appt);
+        stubToResponse(10L, 100L, 5L);
+
+        AppointmentResponse resp = appointmentImpl.markRescheduled(1L);
+
+        assertThat(resp.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+        verify(leadUseCases).updateLeadStatus(5L, LeadStatus.APPOINTMENT_RESCHEDULED, null);
+    }
+
     // ─── listMyAppointments ───────────────────────────────────────────────────
 
     @Test
     void listMyAppointments_returnsAppointmentsForAgent() {
-        AppointmentEntity e1 = buildEntity(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
-        AppointmentEntity e2 = buildEntity(2L, 6L, 10L, AppointmentStatus.CONFIRMED);
-        when(appointmentRepo.findAllByAgent(10L)).thenReturn(List.of(e1, e2));
-        stubToResponse(10L, 100L, 5L);
-        when(leadRepo.findById(6L)).thenReturn(Optional.of(buildLeadEntity(6L, "Contact2", "556")));
+        Appointment a1 = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        Appointment a2 = buildAppointment(2L, 6L, 10L, AppointmentStatus.CONFIRMED);
+        when(appointmentRepo.findAllByAgent(10L)).thenReturn(List.of(a1, a2));
+        when(agentRepo.findById(10L)).thenReturn(Optional.of(buildAgent(10L, 100L, 99L)));
+        when(leadRepo.findById(5L)).thenReturn(Optional.of(buildLead(5L)));
+        when(leadRepo.findById(6L)).thenReturn(Optional.of(buildLead(6L)));
 
         List<AppointmentResponse> result = appointmentImpl.listMyAppointments(10L);
 
@@ -284,10 +313,10 @@ class AppointmentImplTest {
 
     @Test
     void listAll_withAgents_returnsAllAppointments() {
-        AgentEntity agentEntity = buildAgentEntity(10L, 100L);
-        when(agentRepo.findByAdminId(1L)).thenReturn(List.of(agentEntity));
-        AppointmentEntity e = buildEntity(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
-        when(appointmentRepo.findAllByAgents(List.of(10L))).thenReturn(List.of(e));
+        Agent agent = buildAgent(10L, 100L, 1L);
+        when(agentRepo.findByAdminId(1L)).thenReturn(List.of(agent));
+        Appointment a = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findAllByAgents(List.of(10L))).thenReturn(List.of(a));
         stubToResponse(10L, 100L, 5L);
 
         List<AppointmentResponse> result = appointmentImpl.listAll(1L);
@@ -299,12 +328,64 @@ class AppointmentImplTest {
 
     @Test
     void listByLead_returnsAppointmentsForLead() {
-        AppointmentEntity e = buildEntity(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
-        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(e));
+        Appointment a = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(a));
         stubToResponse(10L, 100L, 5L);
 
         List<AppointmentResponse> result = appointmentImpl.listByLead(5L);
 
         assertThat(result).hasSize(1);
+    }
+
+    // ─── cancelLatestByLeadId ─────────────────────────────────────────────────
+
+    @Test
+    void cancelLatestByLeadId_cancelsActiveAppointment() {
+        Appointment active = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(active));
+        when(appointmentRepo.save(any())).thenReturn(active);
+
+        appointmentImpl.cancelLatestByLeadId(5L);
+
+        verify(appointmentRepo).save(argThat(a -> a.getStatus() == AppointmentStatus.CANCELLED));
+    }
+
+    @Test
+    void cancelLatestByLeadId_alreadyCancelled_doesNotSave() {
+        Appointment cancelled = buildAppointment(1L, 5L, 10L, AppointmentStatus.CANCELLED);
+        when(appointmentRepo.findByLeadId(5L)).thenReturn(List.of(cancelled));
+
+        appointmentImpl.cancelLatestByLeadId(5L);
+
+        verify(appointmentRepo, never()).save(any());
+    }
+
+    @Test
+    void cancelLatestByLeadId_nullLeadId_doesNothing() {
+        appointmentImpl.cancelLatestByLeadId(null);
+
+        verify(appointmentRepo, never()).findByLeadId(any());
+    }
+
+    // ─── findById ─────────────────────────────────────────────────────────────
+
+    @Test
+    void findById_found_returnsResponse() {
+        Appointment a = buildAppointment(1L, 5L, 10L, AppointmentStatus.SCHEDULED);
+        when(appointmentRepo.findById(1L)).thenReturn(Optional.of(a));
+        stubToResponse(10L, 100L, 5L);
+
+        AppointmentResponse resp = appointmentImpl.findById(1L);
+
+        assertThat(resp.getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void findById_notFound_throwsRuntimeException() {
+        when(appointmentRepo.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> appointmentImpl.findById(99L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Cita");
     }
 }

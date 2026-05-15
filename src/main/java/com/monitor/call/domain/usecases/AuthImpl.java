@@ -2,16 +2,21 @@ package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.enums.LicenseStatus;
 import com.monitor.call.domain.enums.Role;
+import com.monitor.call.domain.exceptions.BusinessRuleException;
+import com.monitor.call.domain.exceptions.ConflictException;
+import com.monitor.call.domain.exceptions.ForbiddenException;
+import com.monitor.call.domain.exceptions.NotFoundException;
+import com.monitor.call.domain.exceptions.UnauthorizedException;
+import com.monitor.call.domain.models.Agent;
+import com.monitor.call.domain.models.License;
 import com.monitor.call.domain.models.User;
 import com.monitor.call.domain.ports.in.AuthUseCases;
+import com.monitor.call.domain.ports.out.AgentRepositoryPort;
+import com.monitor.call.domain.ports.out.LicenseRepositoryPort;
 import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.LoginResponse;
 import com.monitor.call.domain.responses.UserResponse;
 import com.monitor.call.exceptions.SupportMessages;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.entities.LicenseEntity;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LicenseJpaRepository;
 import com.monitor.call.infrastructure.mappers.UserMapper;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.slf4j.Logger;
@@ -28,49 +33,45 @@ public class AuthImpl implements AuthUseCases {
     private static final Logger logger = LoggerFactory.getLogger(AuthImpl.class);
 
     private final UserRepositoryPort userRepo;
+    private final AgentRepositoryPort agentRepo;
+    private final LicenseRepositoryPort licenseRepo;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
-
     private final SupportMessages supportMessages;
 
-    private final AgentJpaRepository agentJpaRepository;
-    private final LicenseJpaRepository licenseRepo;
-
     public AuthImpl(UserRepositoryPort userRepo,
+                    AgentRepositoryPort agentRepo,
+                    LicenseRepositoryPort licenseRepo,
                     PasswordEncoder passwordEncoder,
                     JwtUtil jwtUtil,
-                    SupportMessages supportMessages,
-                    AgentJpaRepository agentJpaRepository,
-                    LicenseJpaRepository licenseRepo) {
+                    SupportMessages supportMessages) {
         this.userRepo = userRepo;
+        this.agentRepo = agentRepo;
+        this.licenseRepo = licenseRepo;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.supportMessages = supportMessages;
-        this.agentJpaRepository = agentJpaRepository;
-        this.licenseRepo = licenseRepo;
     }
 
     @Override
     public LoginResponse login(String email, String password) {
         User user = userRepo.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Credenciales invalidas"));
+                .orElseThrow(() -> new UnauthorizedException("Credenciales invalidas"));
 
         if (!passwordEncoder.matches(password, user.getPassword()))
-            throw new RuntimeException("Credenciales invalidas");
+            throw new UnauthorizedException("Credenciales invalidas");
 
         if (!Boolean.TRUE.equals(user.getActive())) {
             logger.warn("Intento de login con cuenta desactivada: {}", email);
-            throw new RuntimeException("ACCOUNT_DISABLED");
+            throw new ForbiddenException("ACCOUNT_DISABLED");
         }
 
-        // Validar licencia (SUPER_ADMIN siempre tiene acceso)
         if (!user.getRoles().contains(Role.SUPER_ADMIN)) {
             validateLicense(user);
         }
 
-        // Buscar extension del agente si el usuario tiene rol CALL_AGENT o SALES_AGENT
-        String extension = agentJpaRepository.findByUserId(user.getId())
-                .map(a -> a.getExtension())
+        String extension = agentRepo.findByUserId(user.getId())
+                .map(Agent::getExtension)
                 .orElse(null);
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRoles(), extension);
@@ -86,42 +87,40 @@ public class AuthImpl implements AuthUseCases {
     }
 
     private void validateLicense(User user) {
-        Long adminId = null;
+        Long adminId = resolveAdminId(user);
+        if (adminId == null) return;
 
-        if (user.getRoles().contains(Role.ADMIN)) {
-            adminId = user.getId();
-        } else {
-            // Para agentes, obtener adminId desde su grupo
-            AgentEntity agent = agentJpaRepository.findByUserId(user.getId()).orElse(null);
-            if (agent != null && agent.getGroup() != null) {
-                adminId = agent.getGroup().getAdminId();
-            }
-        }
-
-        if (adminId == null) return; // sin grupo/admin configurado, permitir
-
-        LicenseEntity license = licenseRepo.findByAdminId(adminId).orElse(null);
-        if (license == null) return; // sin licencia configurada, permitir (período de gracia)
+        License license = licenseRepo.findByAdminId(adminId).orElse(null);
+        if (license == null) return;
 
         if (license.getStatus() == LicenseStatus.PENDING) {
-            logger.warn("Acceso bloqueado: licencia PENDING (sin activar) para adminId={}", adminId);
-            throw new RuntimeException("LICENSE_PENDING");
+            logger.warn("Acceso bloqueado: licencia PENDING para adminId={}", adminId);
+            throw new ForbiddenException("LICENSE_PENDING");
         }
         if (license.getStatus() == LicenseStatus.EXPIRED) {
             logger.warn("Acceso bloqueado: licencia EXPIRED para adminId={}", adminId);
-            throw new RuntimeException("LICENSE_EXPIRED");
+            throw new ForbiddenException("LICENSE_EXPIRED");
         }
         if (license.getStatus() == LicenseStatus.SUSPENDED) {
             logger.warn("Acceso bloqueado: licencia SUSPENDED para adminId={}", adminId);
-            throw new RuntimeException("LICENSE_SUSPENDED");
+            throw new ForbiddenException("LICENSE_SUSPENDED");
         }
+    }
+
+    private Long resolveAdminId(User user) {
+        if (user.getRoles().contains(Role.ADMIN)) {
+            return user.getId();
+        }
+        return agentRepo.findByUserId(user.getId())
+                .map(Agent::getAdminId)
+                .orElse(null);
     }
 
     @Override
     @Transactional
     public UserResponse registerAdmin(String name, String email, String password) {
         if (userRepo.existsByEmail(email))
-            throw new RuntimeException("El email ya esta registrado");
+            throw new ConflictException("El email ya esta registrado");
 
         User admin = User.builder()
                 .name(name).email(email)
@@ -137,10 +136,10 @@ public class AuthImpl implements AuthUseCases {
     @Transactional
     public void changePassword(Long userId, String currentPassword, String newPassword) {
         User user = userRepo.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
 
         if (!passwordEncoder.matches(currentPassword, user.getPassword()))
-            throw new RuntimeException("La contrasena actual es incorrecta");
+            throw new UnauthorizedException("La contrasena actual es incorrecta");
 
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setMustChangePassword(false);
@@ -150,7 +149,8 @@ public class AuthImpl implements AuthUseCases {
     @Override
     @Transactional
     public UserResponse addRole(Long userId, Role role) {
-        User user = userRepo.findById(userId).orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
         Set<Role> roles = new HashSet<>(user.getRoles());
         roles.add(role);
         user.setRoles(roles);
@@ -160,10 +160,11 @@ public class AuthImpl implements AuthUseCases {
     @Override
     @Transactional
     public UserResponse removeRole(Long userId, Role role) {
-        User user = userRepo.findById(userId).orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
         Set<Role> roles = new HashSet<>(user.getRoles());
         roles.remove(role);
-        if (roles.isEmpty()) throw new RuntimeException("El usuario debe tener al menos un rol");
+        if (roles.isEmpty()) throw new BusinessRuleException("El usuario debe tener al menos un rol");
         user.setRoles(roles);
         return UserMapper.domainToResponse(userRepo.save(user));
     }
@@ -176,7 +177,7 @@ public class AuthImpl implements AuthUseCases {
     @Override
     public UserResponse getUserById(Long userId) {
         return userRepo.findById(userId).map(UserMapper::domainToResponse)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
     }
 
     @Override

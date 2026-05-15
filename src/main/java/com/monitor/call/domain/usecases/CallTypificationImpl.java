@@ -2,14 +2,15 @@ package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.enums.CallResult;
 import com.monitor.call.domain.enums.LeadStatus;
+import com.monitor.call.domain.exceptions.NotFoundException;
 import com.monitor.call.domain.models.CallTypification;
 import com.monitor.call.domain.ports.in.AppointmentUseCases;
 import com.monitor.call.domain.ports.in.CallTypificationUseCases;
 import com.monitor.call.domain.ports.in.LeadUseCases;
+import com.monitor.call.domain.ports.out.AgentRepositoryPort;
 import com.monitor.call.domain.ports.out.CallTypificationRepositoryPort;
+import com.monitor.call.domain.ports.out.UserRepositoryPort;
 import com.monitor.call.domain.responses.CallTypificationResponse;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
-import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.mappers.LeadMapper;
 import com.monitor.call.infrastructure.requests.CallTypificationRequest;
 import org.slf4j.Logger;
@@ -28,26 +29,24 @@ public class CallTypificationImpl implements CallTypificationUseCases {
     private final CallTypificationRepositoryPort typRepo;
     private final LeadUseCases leadUseCases;
     private final AppointmentUseCases appointmentUseCases;
-    private final UserJpaRepository userRepo;
-    private final AgentJpaRepository agentRepo;
+    private final AgentRepositoryPort agentRepo;
+    private final UserRepositoryPort userRepo;
 
     public CallTypificationImpl(CallTypificationRepositoryPort typRepo,
                                 LeadUseCases leadUseCases,
                                 AppointmentUseCases appointmentUseCases,
-                                UserJpaRepository userRepo,
-                                AgentJpaRepository agentRepo) {
+                                AgentRepositoryPort agentRepo,
+                                UserRepositoryPort userRepo) {
         this.typRepo = typRepo;
         this.leadUseCases = leadUseCases;
         this.appointmentUseCases = appointmentUseCases;
-        this.userRepo = userRepo;
         this.agentRepo = agentRepo;
+        this.userRepo = userRepo;
     }
 
     @Override
     @Transactional
     public CallTypificationResponse typify(CallTypificationRequest request, Long agentId) {
-
-        // Si ya existe, actualizar en vez de rechazar (upsert)
         if (typRepo.existsByCallId(request.getCallId())) {
             return updateTypification(request.getCallId(), request, agentId);
         }
@@ -67,10 +66,9 @@ public class CallTypificationImpl implements CallTypificationUseCases {
         logger.info("Llamada tipificada: callId={} result={} agentId={}",
                 request.getCallId(), request.getResult(), agentId);
 
-        // Actualizar status del lead automaticamente segun el resultado
         if (request.getLeadId() != null) {
             updateLeadStatusFromResult(request.getLeadId(), request.getResult(),
-                    request.getCallbackDate() != null ? request.getCallbackDate() : null);
+                    request.getCallbackDate());
         }
 
         return toResponse(saved);
@@ -80,7 +78,7 @@ public class CallTypificationImpl implements CallTypificationUseCases {
     @Transactional
     public CallTypificationResponse updateTypification(String callId, CallTypificationRequest request, Long agentId) {
         CallTypification existing = typRepo.findByCallId(callId)
-                .orElseThrow(() -> new RuntimeException("Tipificacion no encontrada para callId: " + callId));
+                .orElseThrow(() -> new NotFoundException("Tipificacion no encontrada para callId: " + callId));
 
         existing.setResult(request.getResult());
         existing.setContactName(request.getContactName());
@@ -90,7 +88,6 @@ public class CallTypificationImpl implements CallTypificationUseCases {
 
         CallTypification updated = typRepo.save(existing);
 
-        // Re-actualizar lead si corresponde
         if (existing.getLeadId() != null) {
             updateLeadStatusFromResult(existing.getLeadId(), request.getResult(), request.getCallbackDate());
         }
@@ -102,7 +99,7 @@ public class CallTypificationImpl implements CallTypificationUseCases {
     public CallTypificationResponse getByCallId(String callId) {
         return typRepo.findByCallId(callId)
                 .map(this::toResponse)
-                .orElseThrow(() -> new RuntimeException("Tipificacion no encontrada: " + callId));
+                .orElseThrow(() -> new NotFoundException("Tipificacion no encontrada: " + callId));
     }
 
     @Override
@@ -112,10 +109,6 @@ public class CallTypificationImpl implements CallTypificationUseCases {
 
     @Override
     public List<CallTypificationResponse> listByLead(Long leadId) {
-        // Solo tipificaciones que tienen el leadId exacto.
-        // El fallback por teléfono se eliminó porque cuando dos leads comparten
-        // el mismo número los registros huérfanos (leadId IS NULL) son ambiguos
-        // y contaminan el historial de ambos leads.
         return typRepo.findByLeadId(leadId).stream()
                 .sorted(Comparator.comparing(CallTypification::getCreatedAt,
                         Comparator.nullsLast(Comparator.reverseOrder())))
@@ -124,8 +117,7 @@ public class CallTypificationImpl implements CallTypificationUseCases {
     }
 
     /**
-     * Mapea CallResult -> LeadStatus y actualiza el lead automaticamente.
-     * Este es el puente entre el resultado de la llamada y el estado del lead.
+     * Mapea CallResult -> LeadStatus y actualiza el lead automáticamente.
      */
     private void updateLeadStatusFromResult(Long leadId, CallResult result, java.time.LocalDate callbackDate) {
         LeadStatus newStatus = switch (result) {
@@ -140,22 +132,24 @@ public class CallTypificationImpl implements CallTypificationUseCases {
         leadUseCases.updateLeadStatus(leadId, newStatus, callbackDate);
         logger.info("Lead {} actualizado a {} por resultado {}", leadId, newStatus, result);
 
-        // Cancelar la cita activa cuando el agente registra APPOINTMENT_CANCEL
         if (result == CallResult.APPOINTMENT_CANCEL) {
             appointmentUseCases.cancelLatestByLeadId(leadId);
         }
     }
 
-    private CallTypificationResponse toResponse(CallTypification t) {
-        // El campo agentId puede contener tanto el agentEntity.id como el userId,
-        // dependiendo de quién tipificó. Intentamos ambas rutas.
-        String agentName = agentRepo.findById(t.getAgentId())
-                .flatMap(a -> userRepo.findById(a.getUserId()))
-                .map(u -> u.getName())
-                // Fallback: el valor guardado es directamente el userId
-                .orElseGet(() -> userRepo.findById(t.getAgentId())
+    private String resolveAgentName(Long agentId) {
+        return agentRepo.findById(agentId)
+                .map(agent -> agent.getUserName() != null
+                        ? agent.getUserName()
+                        : userRepo.findById(agent.getUserId())
+                                  .map(u -> u.getName())
+                                  .orElse("Desconocido"))
+                .orElseGet(() -> userRepo.findById(agentId)
                         .map(u -> u.getName())
                         .orElse("Desconocido"));
-        return LeadMapper.typDomainToResponse(t, agentName);
+    }
+
+    private CallTypificationResponse toResponse(CallTypification t) {
+        return LeadMapper.typDomainToResponse(t, resolveAgentName(t.getAgentId()));
     }
 }

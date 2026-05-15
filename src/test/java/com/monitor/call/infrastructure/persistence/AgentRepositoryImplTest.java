@@ -4,8 +4,10 @@ import com.monitor.call.domain.models.Agent;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentGroupEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.impl.AgentRepositoryImpl;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.UserEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentGroupJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,7 +27,17 @@ class AgentRepositoryImplTest {
 
     @Mock private AgentJpaRepository agentRepo;
     @Mock private AgentGroupJpaRepository groupRepo;
+    @Mock private UserJpaRepository userRepo;
     @InjectMocks private AgentRepositoryImpl repo;
+
+    private UserEntity buildUserEntity(Long id, String name) {
+        return UserEntity.builder().id(id).name(name).email(name + "@test.com")
+                .password("hash").active(true).build();
+    }
+
+    private void stubUser(Long userId) {
+        when(userRepo.findById(userId)).thenReturn(Optional.of(buildUserEntity(userId, "User" + userId)));
+    }
 
     private AgentEntity buildEntity(Long id, Long userId, String ext) {
         return AgentEntity.builder().id(id).userId(userId).extension(ext).active(true).build();

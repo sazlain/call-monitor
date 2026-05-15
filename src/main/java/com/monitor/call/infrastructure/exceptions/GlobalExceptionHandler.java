@@ -1,5 +1,10 @@
 package com.monitor.call.infrastructure.exceptions;
 
+import com.monitor.call.domain.exceptions.BusinessRuleException;
+import com.monitor.call.domain.exceptions.ConflictException;
+import com.monitor.call.domain.exceptions.ForbiddenException;
+import com.monitor.call.domain.exceptions.NotFoundException;
+import com.monitor.call.domain.exceptions.UnauthorizedException;
 import com.monitor.call.exceptions.CallMonitorException;
 import com.monitor.call.exceptions.ErrorResponse;
 import org.slf4j.Logger;
@@ -106,6 +111,44 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(error);
     }
 
+    // ── Excepciones de dominio tipadas ────────────────────────────────────────
+
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(NotFoundException ex) {
+        logger.warn("Recurso no encontrado: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(errorOf("ERR404", "Recurso no encontrado", ex.getMessage(), HttpStatus.NOT_FOUND));
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflict(ConflictException ex) {
+        logger.warn("Conflicto: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(errorOf("ERR409", "Conflicto", ex.getMessage(), HttpStatus.CONFLICT));
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException ex) {
+        logger.warn("No autorizado: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(errorOf("ERR401", "No autorizado", ex.getMessage(), HttpStatus.UNAUTHORIZED));
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException ex) {
+        String message = resolveAccountMessage(ex.getMessage());
+        logger.warn("Acceso denegado: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(errorOf("ERR403", "Acceso denegado", message, HttpStatus.FORBIDDEN));
+    }
+
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessRule(BusinessRuleException ex) {
+        logger.warn("Regla de negocio: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(errorOf("ERR422", "Regla de negocio no cumplida", ex.getMessage(), HttpStatus.UNPROCESSABLE_ENTITY));
+    }
+
     // ── Entidad no encontrada (RuntimeException con mensaje especifico) ────────
 
     @ExceptionHandler(RuntimeException.class)
@@ -200,5 +243,30 @@ public class GlobalExceptionHandler {
         error.setMessage("Ocurrio un error inesperado. Por favor intenta nuevamente.");
         error.setHttpStatus(HttpStatus.INTERNAL_SERVER_ERROR);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private ErrorResponse errorOf(String id, String title, String message, HttpStatus status) {
+        ErrorResponse error = new ErrorResponse();
+        error.setId(id);
+        error.setTitle(title);
+        error.setMessage(message);
+        error.setHttpStatus(status);
+        return error;
+    }
+
+    private String resolveAccountMessage(String code) {
+        return switch (code) {
+            case "ACCOUNT_DISABLED" ->
+                "Tu cuenta ha sido desactivada. Contacta al administrador de la plataforma.";
+            case "LICENSE_PENDING" ->
+                "Tu licencia aún no ha sido activada. Contacta al administrador de la plataforma.";
+            case "LICENSE_EXPIRED" ->
+                "Tu licencia ha vencido. Contacta al administrador de la plataforma para renovarla.";
+            case "LICENSE_SUSPENDED" ->
+                "Tu licencia está suspendida. Contacta al administrador de la plataforma.";
+            default -> code;
+        };
     }
 }

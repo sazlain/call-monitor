@@ -43,17 +43,32 @@ public class AgentMapper {
      */
     public static AgentResponse domainToResponse(Agent a, Map<Long, UserEntity> userMap) {
         UserEntity user = userMap.get(a.getUserId());
+        return domainToResponseWithName(a,
+                user != null ? user.getName() : "Desconocido",
+                user != null ? user.getEmail() : "");
+    }
+
+    /**
+     * Convierte a response usando nombre y email ya resueltos.
+     * Usar cuando los datos del usuario provienen de UserRepositoryPort (dominio).
+     */
+    public static AgentResponse domainToResponseWithName(Agent a, String name, String email) {
         return AgentResponse.builder()
                 .id(a.getId())
                 .userId(a.getUserId())
                 .extension(a.getExtension())
-                .name(user != null ? user.getName() : "Desconocido")
-                .email(user != null ? user.getEmail() : "")
+                .name(name)
+                .email(email)
                 .active(a.getActive())
                 .groupId(a.getGroupId())
                 .groupName(a.getGroupName())
                 .createdAt(a.getCreatedAt())
                 .build();
+    }
+
+    /** Versión simplificada cuando el Agent ya tiene userName enriquecido. */
+    public static AgentResponse domainToResponseWithName(Agent a, String name) {
+        return domainToResponseWithName(a, name, a.getUserEmail() != null ? a.getUserEmail() : "");
     }
 
     public static AgentGroupResponse groupEntityToResponse(AgentGroupEntity g,
