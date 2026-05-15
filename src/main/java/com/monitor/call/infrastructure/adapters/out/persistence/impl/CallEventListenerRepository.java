@@ -25,7 +25,19 @@ public class CallEventListenerRepository implements CallEventListenerRepositoryP
     public CallEvent saveCallEvent(CallEvent callEvent) {
         CallEventEntity callEventEntity = CallEventMapper.domainToEntity(callEvent);
         logger.info("Saving call event: {}", callEvent);
-        CallEventEntity newCallEventEntity = callEventJpaRepository.save(callEventEntity);
-        return CallEventMapper.entityToDomain(newCallEventEntity);
+        try {
+            CallEventEntity newCallEventEntity = callEventJpaRepository.save(callEventEntity);
+            logger.info("Call event guardado OK: id={} callId={} status={} ext={}",
+                    newCallEventEntity.getId(),
+                    newCallEventEntity.getCallId(),
+                    newCallEventEntity.getCallStatus(),
+                    newCallEventEntity.getCallerExtension());
+            return CallEventMapper.entityToDomain(newCallEventEntity);
+        } catch (Exception e) {
+            logger.error("ERROR al guardar call event en BD: callId={} status={} ext={} — {}",
+                    callEvent.getCallId(), callEvent.getCallStatus(),
+                    callEvent.getCallerExtension(), e.getMessage(), e);
+            throw e;
+        }
     }
 }

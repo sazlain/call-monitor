@@ -91,8 +91,23 @@ public class CallEventListenerController {
                 callEvent.getCallId(), callEvent.getCallStatus(), callEvent.getCallFlow(),
                 callEvent.getCallerExtension(), callEvent.getCalledNumber());
 
-        CallEventListenerResponse response = callEventListenerUseCases.onCallEvent(callEvent);
-        webSocketHandler.emit(callEvent);
+        CallEventListenerResponse response;
+        try {
+            response = callEventListenerUseCases.onCallEvent(callEvent);
+            logger.info("Evento guardado en BD: callId={} status={}", response.getCallId(), response.getStatus());
+        } catch (Exception e) {
+            logger.error("ERROR guardando evento en BD: callId={} status={} — {}",
+                    callEvent.getCallId(), callEvent.getCallStatus(), e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+
+        // Emitir WS en bloque separado — un fallo aquí no debe afectar el guardado en BD
+        try {
+            webSocketHandler.emit(callEvent);
+        } catch (Exception e) {
+            logger.error("ERROR emitiendo WS: callId={} status={} — {}",
+                    callEvent.getCallId(), callEvent.getCallStatus(), e.getMessage(), e);
+        }
 
         return ResponseEntity.ok(response);
     }
