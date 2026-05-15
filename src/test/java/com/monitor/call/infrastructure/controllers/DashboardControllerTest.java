@@ -67,7 +67,7 @@ class DashboardControllerTest {
         AdminDashboardResponse resp = AdminDashboardResponse.builder()
                 .totalAgents(5).build();
         when(jwtUtil.extractUserId("valid-token")).thenReturn(10L);
-        when(dashUseCases.getAdminDashboard(eq(10L), any(), any(), isNull())).thenReturn(resp);
+        when(dashUseCases.getAdminDashboard(eq(10L), any(), any(), isNull(), isNull())).thenReturn(resp);
 
         mvc.perform(get("/api/dashboard/admin")
                 .header("Authorization", AUTH))
@@ -80,14 +80,14 @@ class DashboardControllerTest {
         AdminDashboardResponse resp = AdminDashboardResponse.builder()
                 .totalAgents(2).build();
         when(jwtUtil.extractUserId("valid-token")).thenReturn(10L);
-        when(dashUseCases.getAdminDashboard(eq(10L), any(), any(), eq(5L))).thenReturn(resp);
+        when(dashUseCases.getAdminDashboard(eq(10L), any(), any(), eq(5L), isNull())).thenReturn(resp);
 
         mvc.perform(get("/api/dashboard/admin")
                 .param("groupId", "5")
                 .header("Authorization", AUTH))
                 .andExpect(status().isOk());
 
-        verify(dashUseCases).getAdminDashboard(eq(10L), any(), any(), eq(5L));
+        verify(dashUseCases).getAdminDashboard(eq(10L), any(), any(), eq(5L), isNull());
     }
 
     // ─── GET /api/dashboard/status ───────────────────────────────────────────

@@ -57,11 +57,12 @@ public class DashboardController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
             @RequestParam(required = false) Long groupId,
+            @RequestParam(required = false) String extension,
             @RequestHeader("Authorization") String auth) {
 
         Long adminId = jwtUtil.extractUserId(auth.substring(7));
         OffsetDateTime[] range = resolveRange(from, to);
-        return ResponseEntity.ok(dashUseCases.getAdminDashboard(adminId, range[0], range[1], groupId));
+        return ResponseEntity.ok(dashUseCases.getAdminDashboard(adminId, range[0], range[1], groupId, extension));
     }
 
     /**

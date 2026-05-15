@@ -185,7 +185,7 @@ class DashboardImplTest {
     void getAdminDashboard_noGroups_returnsEmptyResponse() {
         when(groupPort.findByAdminId(1L)).thenReturn(List.of());
 
-        AdminDashboardResponse resp = dashboardImpl.getAdminDashboard(1L, from(), to(), null);
+        AdminDashboardResponse resp = dashboardImpl.getAdminDashboard(1L, from(), to(), null, null);
 
         assertThat(resp.getAdminEmail()).isEmpty();
         assertThat(resp).isNotNull();
@@ -197,7 +197,7 @@ class DashboardImplTest {
         when(groupPort.findById(5L)).thenReturn(Optional.of(group));
         when(agentPort.findExtensionsByGroupId(5L)).thenReturn(List.of());
 
-        AdminDashboardResponse resp = dashboardImpl.getAdminDashboard(1L, from(), to(), 5L);
+        AdminDashboardResponse resp = dashboardImpl.getAdminDashboard(1L, from(), to(), 5L, null);
 
         assertThat(resp).isNotNull();
     }
@@ -225,7 +225,7 @@ class DashboardImplTest {
         when(userPort.findById(1L)).thenReturn(Optional.of(buildUser(1L, "Admin")));
         when(typPort.countByResultForAgent(eq(10L), any(), any())).thenReturn(List.of());
 
-        AdminDashboardResponse resp = dashboardImpl.getAdminDashboard(1L, from(), to(), null);
+        AdminDashboardResponse resp = dashboardImpl.getAdminDashboard(1L, from(), to(), null, null);
 
         assertThat(resp.getTotalCalls()).isEqualTo(10L);
         assertThat(resp.getAnsweredCalls()).isEqualTo(8L);
@@ -257,7 +257,7 @@ class DashboardImplTest {
         when(userPort.findById(1L)).thenReturn(Optional.empty());
         when(typPort.countByResultForAgent(eq(20L), any(), any())).thenReturn(List.of());
 
-        AdminDashboardResponse resp = dashboardImpl.getAdminDashboard(1L, from(), to(), null);
+        AdminDashboardResponse resp = dashboardImpl.getAdminDashboard(1L, from(), to(), null, null);
 
         assertThat(resp.getAlerts()).hasSize(2);
     }

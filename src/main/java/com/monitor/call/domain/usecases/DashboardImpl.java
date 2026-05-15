@@ -132,14 +132,19 @@ public class DashboardImpl implements DashboardUseCases {
     // ── Dashboard del admin ──────────────────────────────────────────────────
 
     @Override
-    public AdminDashboardResponse getAdminDashboard(Long adminId, OffsetDateTime from, OffsetDateTime to, Long groupId) {
+    public AdminDashboardResponse getAdminDashboard(Long adminId, OffsetDateTime from, OffsetDateTime to, Long groupId, String extension) {
         var groups = groupId != null
                 ? groupPort.findById(groupId).map(List::of).orElse(List.of())
                 : groupPort.findByAdminId(adminId).stream().filter(g -> Boolean.TRUE.equals(g.getActive())).toList();
 
-        var allExtensions = groups.stream()
+        var allExtensions = new java.util.ArrayList<>(groups.stream()
                 .flatMap(g -> agentPort.findExtensionsByGroupId(g.getId()).stream())
-                .toList();
+                .toList());
+
+        // If a specific agent is requested, scope down to just that extension
+        if (extension != null && !extension.isBlank() && allExtensions.contains(extension)) {
+            allExtensions = new java.util.ArrayList<>(List.of(extension));
+        }
 
         if (allExtensions.isEmpty()) return AdminDashboardResponse.builder().adminEmail("").build();
 
