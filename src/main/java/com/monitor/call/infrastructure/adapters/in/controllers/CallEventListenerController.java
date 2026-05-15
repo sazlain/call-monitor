@@ -78,6 +78,15 @@ public class CallEventListenerController {
             return ResponseEntity.badRequest().build();
         }
 
+        // Normalizar extensión ANTES de guardar en BD para que las consultas del dashboard funcionen
+        // Ejemplo: Net2Phone envía '2007102001' pero el agente está registrado como '2001'
+        String rawExtension = callEvent.getCallerExtension();
+        String normalizedExtension = webSocketHandler.normalizeExtension(rawExtension);
+        if (!normalizedExtension.equals(rawExtension)) {
+            logger.info("Extensión normalizada antes de guardar: {} -> {}", rawExtension, normalizedExtension);
+            callEvent.setCallerExtension(normalizedExtension);
+        }
+
         logger.info("CallEvent: callId={} status={} flow={} callerExt={} calledNumber={}",
                 callEvent.getCallId(), callEvent.getCallStatus(), callEvent.getCallFlow(),
                 callEvent.getCallerExtension(), callEvent.getCalledNumber());

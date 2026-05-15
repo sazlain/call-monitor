@@ -94,7 +94,7 @@ public class CallEventWebSocketHandler {
         }
     }
 
-    private String normalizeExtension(String rawExtension) {
+    public String normalizeExtension(String rawExtension) {
         if (rawExtension == null || rawExtension.isBlank()) return rawExtension;
         if (agentJpaRepository.findByExtension(rawExtension).isPresent()) return rawExtension;
         for (int len = 4; len <= rawExtension.length(); len++) {
