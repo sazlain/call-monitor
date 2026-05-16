@@ -200,6 +200,37 @@ public class SuperAdminController {
                 .build());
     }
 
+    @PostMapping("/admins/{adminId}/license")
+    @Operation(summary = "Asigna una licencia a un admin que no tiene ninguna")
+    public ResponseEntity<LicenseResponse> assignLicense(
+            @PathVariable Long adminId,
+            @RequestBody CreateAdminWithLicenseRequest req) {
+
+        userRepo.findById(adminId)
+                .orElseThrow(() -> new NotFoundException("Admin no encontrado: " + adminId));
+
+        if (licenseRepo.findByAdminId(adminId).isPresent())
+            throw new ConflictException("Este admin ya tiene una licencia asignada");
+
+        LicensePlanEntity plan = planRepo.findById(req.getPlanId())
+                .orElseThrow(() -> new NotFoundException("Plan no encontrado: " + req.getPlanId()));
+
+        int maxAgents = req.getMaxAgents() != null ? req.getMaxAgents() : plan.getDefaultMaxAgents();
+
+        LicenseEntity license = licenseRepo.save(LicenseEntity.builder()
+                .adminId(adminId)
+                .planId(plan.getId())
+                .planName(plan.getName())
+                .maxAgents(maxAgents)
+                .status(LicenseStatus.PENDING)
+                .billingCycle(plan.getBillingCycle())
+                .priceMonthly(plan.getPrice())
+                .notes(req.getNotes())
+                .build());
+
+        return ResponseEntity.ok(toLicenseResponse(license));
+    }
+
     @PutMapping("/admins/{adminId}/toggle-active")
     @Operation(summary = "Activa o desactiva la cuenta de un admin")
     public ResponseEntity<Void> toggleActive(@PathVariable Long adminId) {
