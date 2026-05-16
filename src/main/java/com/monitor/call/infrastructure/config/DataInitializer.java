@@ -3,8 +3,10 @@ package com.monitor.call.infrastructure.config;
 import com.monitor.call.domain.enums.BillingCycle;
 import com.monitor.call.domain.enums.Role;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.LicensePlanEntity;
+import com.monitor.call.infrastructure.adapters.out.persistence.entities.PaymentMethodEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.UserEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LicensePlanJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.PaymentMethodJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,13 +36,16 @@ public class DataInitializer implements ApplicationRunner {
 
     private final UserJpaRepository userRepo;
     private final LicensePlanJpaRepository planRepo;
+    private final PaymentMethodJpaRepository paymentMethodRepo;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbc;
 
     public DataInitializer(UserJpaRepository userRepo, LicensePlanJpaRepository planRepo,
+                           PaymentMethodJpaRepository paymentMethodRepo,
                            PasswordEncoder passwordEncoder, JdbcTemplate jdbc) {
         this.userRepo = userRepo;
         this.planRepo = planRepo;
+        this.paymentMethodRepo = paymentMethodRepo;
         this.passwordEncoder = passwordEncoder;
         this.jdbc = jdbc;
     }
@@ -51,6 +56,7 @@ public class DataInitializer implements ApplicationRunner {
         migrateLicensesStatusConstraint();
         seedSuperAdmin();
         seedInitialPlans();
+        seedPaymentMethods();
     }
 
     /**
@@ -144,6 +150,17 @@ public class DataInitializer implements ApplicationRunner {
                     .active(true)
                     .build());
             logger.info("Plan mensual inicial creado: 185,000 COP");
+        }
+    }
+
+    private void seedPaymentMethods() {
+        if (!paymentMethodRepo.existsByName("Transferencia bancaria")) {
+            paymentMethodRepo.save(PaymentMethodEntity.builder()
+                    .name("Transferencia bancaria")
+                    .details("Banco: [Nombre del banco]\nCuenta de ahorros: [Número de cuenta]\nTitular: [Nombre del titular]")
+                    .active(true)
+                    .build());
+            logger.info("Método de pago inicial creado: Transferencia bancaria");
         }
     }
 }

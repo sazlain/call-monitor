@@ -8,4 +8,5 @@ import java.util.List;
 public interface PaymentMethodJpaRepository extends JpaRepository<PaymentMethodEntity, Long> {
     List<PaymentMethodEntity> findByActiveTrue();
     List<PaymentMethodEntity> findAllByOrderByCreatedAtAsc();
+    boolean existsByName(String name);
 }
