@@ -126,10 +126,18 @@ public class PaymentImpl implements PaymentUseCases {
     public PaymentSubmissionResponse submitPayment(Long adminId, Long licenseId,
                                                     Long paymentMethodId, BigDecimal amount,
                                                     String notes, MultipartFile file) {
+        // Si no se envió licenseId, buscarlo automáticamente por adminId
+        Long resolvedLicenseId = licenseId;
+        if (resolvedLicenseId == null) {
+            resolvedLicenseId = licenseRepo.findByAdminId(adminId)
+                    .map(l -> l.getId())
+                    .orElse(null);
+        }
+
         // Guardar placeholder para obtener el ID
         PaymentSubmissionEntity submission = PaymentSubmissionEntity.builder()
                 .adminId(adminId)
-                .licenseId(licenseId)
+                .licenseId(resolvedLicenseId)
                 .paymentMethodId(paymentMethodId)
                 .amount(amount)
                 .adminNotes(notes)
@@ -147,7 +155,7 @@ public class PaymentImpl implements PaymentUseCases {
         }
 
         logger.info("Comprobante enviado: adminId={} licenseId={} amount={} submissionId={}",
-                adminId, licenseId, amount, submission.getId());
+                adminId, resolvedLicenseId, amount, submission.getId());
 
         // Notificar a todos los SUPER_ADMINs del nuevo comprobante
         notifySuperAdmins(submission);

@@ -63,7 +63,7 @@ public class PaymentController {
     @Operation(summary = "Enviar comprobante de pago")
     public ResponseEntity<PaymentSubmissionResponse> submitPayment(
             @RequestHeader("Authorization") String auth,
-            @RequestParam Long licenseId,
+            @RequestParam(required = false) Long licenseId,
             @RequestParam Long paymentMethodId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String notes,
