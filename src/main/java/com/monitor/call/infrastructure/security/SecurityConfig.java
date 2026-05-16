@@ -60,6 +60,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/events/calls/event").permitAll()
                 // WebSocket
                 .requestMatchers("/ws/**").permitAll()
+                // Pagos — ADMIN
+                .requestMatchers("/api/payments/**").hasRole("ADMIN")
                 // Solo ADMIN
                 .requestMatchers("/api/dashboard/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/groups/**").hasRole("ADMIN")

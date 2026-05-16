@@ -82,6 +82,19 @@ CREATE INDEX IF NOT EXISTS idx_call_typifications_lead_id
 CREATE INDEX IF NOT EXISTS idx_call_typifications_result
     ON call_typifications (result);
 
+-- ── Métodos de pago iniciales ────────────────────────────────────────────────
+INSERT INTO payment_methods (name, details, active)
+SELECT 'Transferencia bancaria',
+       'Banco: [Nombre del banco] — Cuenta: [Número de cuenta] — Titular: [Nombre del titular]',
+       true
+WHERE NOT EXISTS (SELECT 1 FROM payment_methods WHERE name = 'Transferencia bancaria');
+
+INSERT INTO payment_methods (name, details, active)
+SELECT 'Nequi',
+       'Número Nequi: [300-XXX-XXXX] — Titular: [Nombre del titular]',
+       true
+WHERE NOT EXISTS (SELECT 1 FROM payment_methods WHERE name = 'Nequi');
+
 -- ============================================================
 -- FIN DEL SCRIPT
 -- ============================================================
