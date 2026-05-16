@@ -52,7 +52,8 @@ public class PaymentController {
     public ResponseEntity<MyLicenseResponse> getMyLicense(
             @RequestHeader("Authorization") String auth) {
         Long adminId = jwtUtil.extractUserId(auth.substring(7));
-        return ResponseEntity.ok(paymentUseCases.getMyLicense(adminId));
+        var license = paymentUseCases.getMyLicense(adminId);
+        return license != null ? ResponseEntity.ok(license) : ResponseEntity.noContent().build();
     }
 
     // ── ADMIN: Enviar comprobante ──────────────────────────────────────────────

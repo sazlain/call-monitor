@@ -97,8 +97,8 @@ public class PaymentImpl implements PaymentUseCases {
 
     @Override
     public MyLicenseResponse getMyLicense(Long adminId) {
-        LicenseEntity license = licenseRepo.findByAdminId(adminId)
-                .orElseThrow(() -> new RuntimeException("Licencia no encontrada para el admin"));
+        LicenseEntity license = licenseRepo.findByAdminId(adminId).orElse(null);
+        if (license == null) return null;
 
         var plan = license.getPlanId() != null
                 ? planRepo.findById(license.getPlanId()).orElse(null)
