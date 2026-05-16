@@ -2,6 +2,7 @@ package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.enums.LicenseStatus;
 import com.monitor.call.domain.enums.PaymentStatus;
+import com.monitor.call.domain.enums.Role;
 import com.monitor.call.domain.ports.in.PaymentUseCases;
 import com.monitor.call.domain.responses.MyLicenseResponse;
 import com.monitor.call.domain.responses.PaymentMethodResponse;
@@ -148,6 +149,9 @@ public class PaymentImpl implements PaymentUseCases {
         logger.info("Comprobante enviado: adminId={} licenseId={} amount={} submissionId={}",
                 adminId, licenseId, amount, submission.getId());
 
+        // Notificar a todos los SUPER_ADMINs del nuevo comprobante
+        notifySuperAdmins(submission);
+
         return toSubmissionResponse(submission);
     }
 
@@ -239,6 +243,26 @@ public class PaymentImpl implements PaymentUseCases {
         licenseRepo.save(license);
 
         logger.info("Licencia {} activada — vence en {} días ({})", licenseId, durationDays, license.getExpirationDate());
+    }
+
+    private void notifySuperAdmins(PaymentSubmissionEntity submission) {
+        try {
+            String adminName = userRepo.findById(submission.getAdminId())
+                    .map(u -> u.getName()).orElse("un administrador");
+
+            String subject = "💳 Nuevo comprobante de pago recibido";
+            String body = "<h2>Nuevo comprobante de pago pendiente de revisión</h2>"
+                    + "<p><strong>Administrador:</strong> " + adminName + "</p>"
+                    + "<p><strong>Monto:</strong> $" + submission.getAmount().toPlainString() + "</p>"
+                    + "<p><strong>Comprobante #:</strong> " + submission.getId() + "</p>"
+                    + "<p>Ingresa al panel de Super Admin para revisar y aprobar o rechazar este comprobante.</p>";
+
+            userRepo.findByRole(Role.SUPER_ADMIN).forEach(superAdmin ->
+                    emailService.send(superAdmin.getEmail(), subject, body)
+            );
+        } catch (Exception e) {
+            logger.warn("No se pudo notificar a SUPER_ADMIN sobre nuevo comprobante: {}", e.getMessage());
+        }
     }
 
     private void notifyAdmin(Long adminId, boolean approved, String reviewerNotes) {
