@@ -44,4 +44,7 @@ public interface PaymentUseCases {
     PaymentSubmissionResponse reject(Long submissionId, Long reviewerId, String notes);
 
     Resource getFile(Long submissionId);
+
+    /** Obtiene el archivo de un comprobante verificando que pertenezca al admin */
+    Resource getMyFile(Long adminId, Long submissionId);
 }

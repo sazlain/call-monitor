@@ -66,8 +66,9 @@ public class AuthImpl implements AuthUseCases {
             throw new ForbiddenException("ACCOUNT_DISABLED");
         }
 
+        LicenseStatus licenseStatus = null;
         if (!user.getRoles().contains(Role.SUPER_ADMIN)) {
-            validateLicense(user);
+            licenseStatus = resolveLicenseStatus(user);
         }
 
         String extension = agentRepo.findByUserId(user.getId())
@@ -75,7 +76,7 @@ public class AuthImpl implements AuthUseCases {
                 .orElse(null);
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRoles(), extension);
-        logger.info("Login exitoso: {} extension: {}", email, extension);
+        logger.info("Login exitoso: {} extension: {} licenseStatus: {}", email, extension, licenseStatus);
 
         return LoginResponse.builder()
                 .token(token).tokenType("Bearer")
@@ -83,28 +84,29 @@ public class AuthImpl implements AuthUseCases {
                 .userId(user.getId()).name(user.getName()).email(user.getEmail())
                 .roles(user.getRoles()).extension(extension)
                 .mustChangePassword(user.getMustChangePassword())
+                .licenseStatus(licenseStatus)
                 .build();
     }
 
-    private void validateLicense(User user) {
+    private LicenseStatus resolveLicenseStatus(User user) {
         Long adminId = resolveAdminId(user);
-        if (adminId == null) return;
+        if (adminId == null) return null;
 
         License license = licenseRepo.findByAdminId(adminId).orElse(null);
-        if (license == null) return;
+        if (license == null) return null;
 
-        if (license.getStatus() == LicenseStatus.PENDING) {
-            logger.warn("Acceso bloqueado: licencia PENDING para adminId={}", adminId);
-            throw new ForbiddenException("LICENSE_PENDING");
+        LicenseStatus status = license.getStatus();
+        boolean isBlocked = status == LicenseStatus.PENDING
+                || status == LicenseStatus.EXPIRED
+                || status == LicenseStatus.SUSPENDED;
+
+        if (isBlocked && !user.getRoles().contains(Role.ADMIN)) {
+            // Agentes no pueden trabajar si el admin no tiene licencia activa
+            logger.warn("Acceso bloqueado a agente: licencia {} para adminId={}", status, adminId);
+            throw new ForbiddenException("LICENSE_" + status.name());
         }
-        if (license.getStatus() == LicenseStatus.EXPIRED) {
-            logger.warn("Acceso bloqueado: licencia EXPIRED para adminId={}", adminId);
-            throw new ForbiddenException("LICENSE_EXPIRED");
-        }
-        if (license.getStatus() == LicenseStatus.SUSPENDED) {
-            logger.warn("Acceso bloqueado: licencia SUSPENDED para adminId={}", adminId);
-            throw new ForbiddenException("LICENSE_SUSPENDED");
-        }
+
+        return status;
     }
 
     private Long resolveAdminId(User user) {

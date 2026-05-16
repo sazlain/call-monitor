@@ -36,3 +36,5 @@ build/
 .env.docker
 .claude
 .idea
+# Archivos subidos por usuarios
+uploads/

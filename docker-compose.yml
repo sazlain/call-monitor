@@ -43,11 +43,13 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_UPLOADS_DIR: /app/uploads
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:
       - ./src:/app/src
       - ./target:/app/target
+      - uploads_data:/app/uploads
     networks:
       - call-network
     restart: unless-stopped
@@ -60,6 +62,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  uploads_data:
     driver: local
 
 networks:

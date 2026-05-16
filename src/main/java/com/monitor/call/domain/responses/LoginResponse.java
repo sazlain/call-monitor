@@ -1,5 +1,6 @@
 package com.monitor.call.domain.responses;
 
+import com.monitor.call.domain.enums.LicenseStatus;
 import com.monitor.call.domain.enums.Role;
 import lombok.*;
 import java.util.Set;
@@ -15,4 +16,5 @@ public class LoginResponse {
     private Set<Role> roles;
     private String extension;
     private Boolean mustChangePassword;
+    private LicenseStatus licenseStatus;
 }

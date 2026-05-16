@@ -49,13 +49,13 @@ public class PaymentImpl implements PaymentUseCases {
                        UserJpaRepository userRepo,
                        FileStorageService fileStorage,
                        EmailService emailService) {
-        this.methodRepo    = methodRepo;
+        this.methodRepo     = methodRepo;
         this.submissionRepo = submissionRepo;
-        this.licenseRepo   = licenseRepo;
-        this.planRepo      = planRepo;
-        this.userRepo      = userRepo;
-        this.fileStorage   = fileStorage;
-        this.emailService  = emailService;
+        this.licenseRepo    = licenseRepo;
+        this.planRepo       = planRepo;
+        this.userRepo       = userRepo;
+        this.fileStorage    = fileStorage;
+        this.emailService   = emailService;
     }
 
     // ── Métodos de pago ────────────────────────────────────────────────────────
@@ -126,12 +126,21 @@ public class PaymentImpl implements PaymentUseCases {
     public PaymentSubmissionResponse submitPayment(Long adminId, Long licenseId,
                                                     Long paymentMethodId, BigDecimal amount,
                                                     String notes, MultipartFile file) {
-        // Si no se envió licenseId, buscarlo automáticamente por adminId
+        // Si no se envió licenseId, buscarlo o crear una licencia PENDING automáticamente
         Long resolvedLicenseId = licenseId;
         if (resolvedLicenseId == null) {
             resolvedLicenseId = licenseRepo.findByAdminId(adminId)
-                    .map(l -> l.getId())
-                    .orElse(null);
+                    .map(LicenseEntity::getId)
+                    .orElseGet(() -> {
+                        LicenseEntity newLicense = licenseRepo.save(LicenseEntity.builder()
+                                .adminId(adminId)
+                                .planName("Sin Plan Asignado")
+                                .maxAgents(10)
+                                .status(LicenseStatus.PENDING)
+                                .build());
+                        logger.info("Licencia PENDING creada automáticamente para adminId={}", adminId);
+                        return newLicense.getId();
+                    });
         }
 
         // Guardar placeholder para obtener el ID
@@ -225,6 +234,19 @@ public class PaymentImpl implements PaymentUseCases {
     public Resource getFile(Long submissionId) {
         PaymentSubmissionEntity submission = submissionRepo.findById(submissionId)
                 .orElseThrow(() -> new RuntimeException("Comprobante no encontrado"));
+        if (submission.getFilePath() == null) {
+            throw new RuntimeException("Este comprobante no tiene archivo adjunto");
+        }
+        return fileStorage.loadFile(submission.getFilePath());
+    }
+
+    @Override
+    public Resource getMyFile(Long adminId, Long submissionId) {
+        PaymentSubmissionEntity submission = submissionRepo.findById(submissionId)
+                .orElseThrow(() -> new RuntimeException("Comprobante no encontrado"));
+        if (!submission.getAdminId().equals(adminId)) {
+            throw new RuntimeException("No tienes permiso para acceder a este comprobante");
+        }
         if (submission.getFilePath() == null) {
             throw new RuntimeException("Este comprobante no tiene archivo adjunto");
         }

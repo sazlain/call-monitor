@@ -84,6 +84,26 @@ public class PaymentController {
         return ResponseEntity.ok(paymentUseCases.listMySubmissions(adminId));
     }
 
+    // ── ADMIN: Descargar archivo de mi comprobante ────────────────────────────
+
+    @GetMapping("/api/payments/my/{id}/file")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Descargar archivo adjunto de uno de mis comprobantes")
+    public ResponseEntity<Resource> getMyFile(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String auth) {
+        Long adminId = jwtUtil.extractUserId(auth.substring(7));
+        Resource resource = paymentUseCases.getMyFile(adminId, id);
+        String contentType = resource.getFilename() != null && resource.getFilename().toLowerCase().endsWith(".pdf")
+                ? MediaType.APPLICATION_PDF_VALUE
+                : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + resource.getFilename() + "\"")
+                .contentType(MediaType.parseMediaType(contentType))
+                .body(resource);
+    }
+
     // ── SUPER_ADMIN: Comprobantes ──────────────────────────────────────────────
 
     @GetMapping("/api/superadmin/payments")
