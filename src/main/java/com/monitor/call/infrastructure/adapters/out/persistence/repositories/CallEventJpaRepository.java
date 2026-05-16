@@ -119,7 +119,9 @@ public interface CallEventJpaRepository extends JpaRepository<CallEventEntity, L
 
     // ── Bloque 5: Estado en tiempo real ──────────────────────────────────────
 
-    @Query(value = "SELECT DISTINCT caller_extension FROM call_events e WHERE caller_extension IN :extensions AND call_status IN ('CALLING','ANSWER') AND created_at = (SELECT MAX(e2.created_at) FROM call_events e2 WHERE e2.call_id = e.call_id)", nativeQuery = true)
+    // Un agente está "activo" si su evento más reciente (a nivel de extensión, no de call_id)
+    // es CALLING o ANSWER. Así, cualquier HANGUP posterior limpia el estado aunque sea de otra llamada.
+    @Query(value = "SELECT DISTINCT caller_extension FROM call_events e WHERE caller_extension IN :extensions AND call_status IN ('CALLING','ANSWER') AND created_at = (SELECT MAX(e2.created_at) FROM call_events e2 WHERE e2.caller_extension = e.caller_extension)", nativeQuery = true)
     List<String> findActiveExtensions(@Param("extensions") List<String> extensions);
 
     @Query("SELECT e FROM CallEventEntity e WHERE e.callerExtension = :ext ORDER BY e.createdAt DESC")
