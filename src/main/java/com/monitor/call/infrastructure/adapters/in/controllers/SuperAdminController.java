@@ -17,8 +17,11 @@ import com.monitor.call.infrastructure.requests.CreateAdminWithLicenseRequest;
 import com.monitor.call.infrastructure.requests.CreatePlanRequest;
 import com.monitor.call.infrastructure.requests.UpdateLicenseRequest;
 import com.monitor.call.infrastructure.requests.UpdatePlanRequest;
+import com.monitor.call.infrastructure.services.EmailService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.*;
 import com.monitor.call.domain.exceptions.ConflictException;
 import com.monitor.call.domain.exceptions.NotFoundException;
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
@@ -39,22 +43,38 @@ import java.util.Set;
 @Tag(name = "Super Admin", description = "Gestión de la plataforma: admins, planes, licencias y estadísticas")
 public class SuperAdminController {
 
+    private static final Logger logger = LoggerFactory.getLogger(SuperAdminController.class);
+
+    private static final String PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     private final UserJpaRepository userRepo;
     private final AgentJpaRepository agentRepo;
     private final LicenseJpaRepository licenseRepo;
     private final LicensePlanJpaRepository planRepo;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     public SuperAdminController(UserJpaRepository userRepo,
                                 AgentJpaRepository agentRepo,
                                 LicenseJpaRepository licenseRepo,
                                 LicensePlanJpaRepository planRepo,
-                                PasswordEncoder passwordEncoder) {
+                                PasswordEncoder passwordEncoder,
+                                EmailService emailService) {
         this.userRepo = userRepo;
         this.agentRepo = agentRepo;
         this.licenseRepo = licenseRepo;
         this.planRepo = planRepo;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
+    }
+
+    private String generateTempPassword() {
+        StringBuilder sb = new StringBuilder(12);
+        for (int i = 0; i < 12; i++) {
+            sb.append(PASSWORD_CHARS.charAt(RANDOM.nextInt(PASSWORD_CHARS.length())));
+        }
+        return sb.toString();
     }
 
     // ── Estadísticas ──────────────────────────────────────────────────────────
@@ -122,10 +142,12 @@ public class SuperAdminController {
         LicensePlanEntity plan = planRepo.findById(req.getPlanId())
                 .orElseThrow(() -> new NotFoundException("Plan no encontrado: " + req.getPlanId()));
 
+        String tempPassword = generateTempPassword();
+
         UserEntity admin = userRepo.save(UserEntity.builder()
                 .name(req.getName())
                 .email(req.getEmail())
-                .password(passwordEncoder.encode(req.getPassword()))
+                .password(passwordEncoder.encode(tempPassword))
                 .active(true)
                 .roles(Set.of(Role.ADMIN))
                 .mustChangePassword(true)
@@ -143,6 +165,26 @@ public class SuperAdminController {
                 .priceMonthly(plan.getPrice())
                 .notes(req.getNotes())
                 .build());
+
+        // Enviar email de bienvenida con la clave temporal
+        try {
+            String subject = "🎉 Bienvenido a ZentCall — Tu cuenta ha sido creada";
+            String body = "<h2>¡Hola, " + admin.getName() + "!</h2>"
+                    + "<p>Tu cuenta de administrador en <strong>ZentCall</strong> ha sido creada exitosamente.</p>"
+                    + "<p>Usa las siguientes credenciales para tu primer inicio de sesión:</p>"
+                    + "<table style='border-collapse:collapse;margin:16px 0;'>"
+                    + "<tr><td style='padding:6px 12px;font-weight:bold;'>Email:</td>"
+                    + "<td style='padding:6px 12px;'>" + admin.getEmail() + "</td></tr>"
+                    + "<tr><td style='padding:6px 12px;font-weight:bold;'>Contraseña temporal:</td>"
+                    + "<td style='padding:6px 12px;font-family:monospace;font-size:1.1em;'>" + tempPassword + "</td></tr>"
+                    + "</table>"
+                    + "<p style='color:#e65c00;'><strong>⚠️ Deberás cambiar esta contraseña en tu primer inicio de sesión.</strong></p>"
+                    + "<p>Accede al sistema en: <a href='https://zentcall.com'>zentcall.com</a></p>"
+                    + "<p>Si tienes alguna pregunta, contacta al administrador de la plataforma.</p>";
+            emailService.send(admin.getEmail(), subject, body);
+        } catch (Exception e) {
+            logger.warn("No se pudo enviar email de bienvenida al admin {}: {}", admin.getEmail(), e.getMessage());
+        }
 
         return ResponseEntity.status(HttpStatus.CREATED).body(AdminSummaryResponse.builder()
                 .id(admin.getId())
