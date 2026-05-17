@@ -59,10 +59,10 @@ public class SingleSessionFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Verificar si el token tiene sessionId (solo agentes lo tienen)
+        // Verificar si el token tiene sessionId (agentes y admins lo tienen; SUPER_ADMIN no)
         String tokenSessionId = jwtUtil.extractSessionId(token);
         if (tokenSessionId == null) {
-            // ADMIN / SUPER_ADMIN — sin restricción de sesión única
+            // SUPER_ADMIN — sin restricción de sesión única
             chain.doFilter(request, response);
             return;
         }

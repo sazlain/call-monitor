@@ -76,10 +76,11 @@ public class AuthImpl implements AuthUseCases {
                 .map(Agent::getExtension)
                 .orElse(null);
 
-        // CALL_AGENT y SALES_AGENT: sesión única — invalidar cualquier sesión anterior
+        // ADMIN, CALL_AGENT y SALES_AGENT: sesión única — invalidar cualquier sesión anterior
         String sessionId = null;
         boolean isAgent = user.getRoles().contains(Role.CALL_AGENT)
-                       || user.getRoles().contains(Role.SALES_AGENT);
+                       || user.getRoles().contains(Role.SALES_AGENT)
+                       || user.getRoles().contains(Role.ADMIN);
         if (isAgent) {
             sessionId = UUID.randomUUID().toString();
             user.setSessionId(sessionId);

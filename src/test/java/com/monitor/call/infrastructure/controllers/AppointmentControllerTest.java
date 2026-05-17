@@ -6,6 +6,7 @@ import com.monitor.call.domain.responses.AppointmentResponse;
 import com.monitor.call.infrastructure.adapters.in.controllers.AppointmentController;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,7 @@ class AppointmentControllerTest {
     @MockitoBean private AppointmentUseCases appointmentUseCases;
     @MockitoBean private JwtUtil jwtUtil;
     @MockitoBean private AgentJpaRepository agentRepo;
+    @MockitoBean private UserJpaRepository userJpaRepository;
 
     private static final String AUTH = "Bearer valid-token";
 
