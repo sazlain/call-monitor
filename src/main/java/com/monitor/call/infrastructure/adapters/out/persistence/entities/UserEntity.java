@@ -50,6 +50,13 @@ public class UserEntity {
     @Column(name = "default_call_agent_id")
     private Long defaultCallAgentId;
 
+    /**
+     * Token de sesión activa. Solo se usa para CALL_AGENT y SALES_AGENT.
+     * Cada login regenera este valor; si no coincide con el JWT → sesión invalidada.
+     */
+    @Column(name = "session_id")
+    private String sessionId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

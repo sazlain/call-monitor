@@ -5,7 +5,9 @@ import com.monitor.call.domain.ports.in.AuthUseCases;
 import com.monitor.call.domain.responses.LoginResponse;
 import com.monitor.call.domain.responses.UserResponse;
 import com.monitor.call.infrastructure.adapters.in.controllers.AuthController;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
@@ -35,6 +37,8 @@ class AuthControllerTest {
 
     @MockitoBean private AuthUseCases authUseCases;
     @MockitoBean private JwtUtil jwtUtil;
+    @MockitoBean private UserJpaRepository userJpaRepository;
+    @MockitoBean private SimpMessagingTemplate ws;
 
     @org.springframework.beans.factory.annotation.Value("${app.admin.secret:test-secret}")
     String adminSecret;

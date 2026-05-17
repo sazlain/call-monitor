@@ -23,6 +23,8 @@ public class LicenseRepositoryImpl implements LicenseRepositoryPort {
                 .adminId(e.getAdminId())
                 .status(e.getStatus())
                 .maxAgents(e.getMaxAgents())
+                .maxCallAgents(e.getMaxCallAgents())
+                .maxSalesAgents(e.getMaxSalesAgents())
                 .build());
     }
 }

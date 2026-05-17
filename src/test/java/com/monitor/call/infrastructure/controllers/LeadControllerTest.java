@@ -5,6 +5,7 @@ import com.monitor.call.domain.ports.in.LeadUseCases;
 import com.monitor.call.domain.responses.BulkLeadResponse;
 import com.monitor.call.domain.responses.LeadResponse;
 import com.monitor.call.infrastructure.adapters.in.controllers.LeadController;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -32,6 +34,7 @@ class LeadControllerTest {
 
     @MockitoBean private LeadUseCases leadUseCases;
     @MockitoBean private JwtUtil jwtUtil;
+    @MockitoBean private UserJpaRepository userJpaRepository;
 
     private static final String AUTH = "Bearer valid-token";
 
@@ -131,8 +134,10 @@ class LeadControllerTest {
     @Test
     void get_exists_returnsLead() throws Exception {
         when(leadUseCases.getLead(1L)).thenReturn(buildLead(1L, "Juan", LeadStatus.NEW));
+        when(jwtUtil.extractRoles("valid-token")).thenReturn(Set.of());
 
-        mvc.perform(get("/api/leads/1"))
+        mvc.perform(get("/api/leads/1")
+                .header("Authorization", AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1));
     }
@@ -141,8 +146,10 @@ class LeadControllerTest {
     void get_notFound_returns404() throws Exception {
         when(leadUseCases.getLead(99L))
                 .thenThrow(new RuntimeException("Lead no encontrado"));
+        when(jwtUtil.extractRoles("valid-token")).thenReturn(Set.of());
 
-        mvc.perform(get("/api/leads/99"))
+        mvc.perform(get("/api/leads/99")
+                .header("Authorization", AUTH))
                 .andExpect(status().isNotFound());
     }
 

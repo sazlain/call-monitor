@@ -31,7 +31,8 @@ public interface PaymentUseCases {
     // ── Comprobantes ───────────────────────────────────────────────────────────
 
     PaymentSubmissionResponse submitPayment(Long adminId, Long licenseId, Long paymentMethodId,
-                                            BigDecimal amount, String notes, MultipartFile file);
+                                            BigDecimal amount, String notes, MultipartFile file,
+                                            Integer additionalCallAgents, Integer additionalSalesAgents);
 
     List<PaymentSubmissionResponse> listMySubmissions(Long adminId);
 

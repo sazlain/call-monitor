@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.UUID;
 
 @Service
 public class AuthImpl implements AuthUseCases {
@@ -75,7 +76,19 @@ public class AuthImpl implements AuthUseCases {
                 .map(Agent::getExtension)
                 .orElse(null);
 
-        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRoles(), extension);
+        // ADMIN, CALL_AGENT y SALES_AGENT: sesión única — invalidar cualquier sesión anterior
+        String sessionId = null;
+        boolean isAgent = user.getRoles().contains(Role.CALL_AGENT)
+                       || user.getRoles().contains(Role.SALES_AGENT)
+                       || user.getRoles().contains(Role.ADMIN);
+        if (isAgent) {
+            sessionId = UUID.randomUUID().toString();
+            user.setSessionId(sessionId);
+            userRepo.save(user);
+            logger.info("Sesión única generada para agente {}: {}", email, sessionId.substring(0, 8) + "…");
+        }
+
+        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRoles(), extension, sessionId);
         logger.info("Login exitoso: {} extension: {} licenseStatus: {}", email, extension, licenseStatus);
 
         return LoginResponse.builder()

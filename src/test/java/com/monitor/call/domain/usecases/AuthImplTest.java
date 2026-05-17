@@ -50,7 +50,7 @@ class AuthImplTest {
         when(userRepo.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("pass123", user.getPassword())).thenReturn(true);
         when(agentRepo.findByUserId(user.getId())).thenReturn(Optional.empty());
-        when(jwtUtil.generateToken(eq(user.getId()), eq(user.getEmail()), any(), isNull())).thenReturn(token);
+        when(jwtUtil.generateToken(eq(user.getId()), eq(user.getEmail()), any(), isNull(), any())).thenReturn(token);
         when(jwtUtil.getExpirationMinutes()).thenReturn(60L);
     }
 
@@ -75,7 +75,7 @@ class AuthImplTest {
         when(userRepo.findByEmail("test@test.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("pass123", "hashedPass")).thenReturn(true);
         when(agentRepo.findByUserId(1L)).thenReturn(Optional.of(agent));
-        when(jwtUtil.generateToken(1L, "test@test.com", user.getRoles(), "1001")).thenReturn("jwt-ext");
+        when(jwtUtil.generateToken(eq(1L), eq("test@test.com"), any(), eq("1001"), any())).thenReturn("jwt-ext");
         when(jwtUtil.getExpirationMinutes()).thenReturn(60L);
 
         LoginResponse resp = auth.login("test@test.com", "pass123");
@@ -165,7 +165,7 @@ class AuthImplTest {
         when(userRepo.findByEmail("sa@test.com")).thenReturn(Optional.of(superAdmin));
         when(passwordEncoder.matches("pass", "hash")).thenReturn(true);
         when(agentRepo.findByUserId(1L)).thenReturn(Optional.empty());
-        when(jwtUtil.generateToken(any(), any(), any(), any())).thenReturn("sa-token");
+        when(jwtUtil.generateToken(any(), any(), any(), any(), isNull())).thenReturn("sa-token");
         when(jwtUtil.getExpirationMinutes()).thenReturn(60L);
 
         LoginResponse resp = auth.login("sa@test.com", "pass");
@@ -181,7 +181,7 @@ class AuthImplTest {
         when(passwordEncoder.matches("pass123", user.getPassword())).thenReturn(true);
         when(licenseRepo.findByAdminId(1L)).thenReturn(Optional.empty());
         when(agentRepo.findByUserId(1L)).thenReturn(Optional.empty());
-        when(jwtUtil.generateToken(any(), any(), any(), any())).thenReturn("token");
+        when(jwtUtil.generateToken(any(), any(), any(), any(), any())).thenReturn("token");
         when(jwtUtil.getExpirationMinutes()).thenReturn(60L);
 
         assertThatCode(() -> auth.login("test@test.com", "pass123")).doesNotThrowAnyException();
@@ -195,7 +195,7 @@ class AuthImplTest {
         when(licenseRepo.findByAdminId(1L)).thenReturn(Optional.of(
                 License.builder().status(LicenseStatus.ACTIVE).maxAgents(10).build()));
         when(agentRepo.findByUserId(1L)).thenReturn(Optional.empty());
-        when(jwtUtil.generateToken(any(), any(), any(), any())).thenReturn("token");
+        when(jwtUtil.generateToken(any(), any(), any(), any(), any())).thenReturn("token");
         when(jwtUtil.getExpirationMinutes()).thenReturn(60L);
 
         assertThatCode(() -> auth.login("test@test.com", "pass123")).doesNotThrowAnyException();

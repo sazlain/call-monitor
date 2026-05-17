@@ -6,7 +6,9 @@ import com.monitor.call.domain.responses.SalesAgentResponse;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.entities.UserEntity;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
+import com.monitor.call.domain.exceptions.BusinessRuleException;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LeadJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LicenseJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.services.EmailService;
 import org.slf4j.Logger;
@@ -24,20 +26,23 @@ public class SalesAgentImpl implements SalesAgentUseCases {
 
     private static final Logger logger = LoggerFactory.getLogger(SalesAgentImpl.class);
 
-    private final UserJpaRepository userRepo;
-    private final AgentJpaRepository agentRepo;
-    private final LeadJpaRepository leadRepo;
-    private final PasswordEncoder passwordEncoder;
-    private final EmailService emailService;
+    private final UserJpaRepository    userRepo;
+    private final AgentJpaRepository   agentRepo;
+    private final LeadJpaRepository    leadRepo;
+    private final LicenseJpaRepository licenseRepo;
+    private final PasswordEncoder      passwordEncoder;
+    private final EmailService         emailService;
 
     public SalesAgentImpl(UserJpaRepository userRepo,
                           AgentJpaRepository agentRepo,
                           LeadJpaRepository leadRepo,
+                          LicenseJpaRepository licenseRepo,
                           PasswordEncoder passwordEncoder,
                           EmailService emailService) {
         this.userRepo        = userRepo;
         this.agentRepo       = agentRepo;
         this.leadRepo        = leadRepo;
+        this.licenseRepo     = licenseRepo;
         this.passwordEncoder = passwordEncoder;
         this.emailService    = emailService;
     }
@@ -48,6 +53,24 @@ public class SalesAgentImpl implements SalesAgentUseCases {
                                                Long defaultCallAgentId, Long adminId) {
         if (userRepo.existsByEmail(email)) {
             throw new RuntimeException("Ya existe un usuario con el email: " + email);
+        }
+
+        // Validar límite de sales agents según la licencia del admin
+        if (adminId != null) {
+            licenseRepo.findByAdminId(adminId).ifPresent(license -> {
+                int maxAllowed = license.getMaxSalesAgents() != null ? license.getMaxSalesAgents() : 0;
+                if (maxAllowed == 0) {
+                    throw new BusinessRuleException("SALES_AGENT_NOT_INCLUDED: "
+                            + "Tu plan actual no incluye Sales Agents. "
+                            + "Solicita una expansión de usuarios para habilitarlos.");
+                }
+                int current = userRepo.findByRoleAndAdminId(Role.SALES_AGENT, adminId).size();
+                if (current >= maxAllowed) {
+                    throw new BusinessRuleException("SALES_AGENT_LIMIT_REACHED: tu plan permite máximo "
+                            + maxAllowed + " Sales Agent" + (maxAllowed == 1 ? "" : "s")
+                            + ". Solicita una expansión de usuarios para agregar más.");
+                }
+            });
         }
 
         String tempPassword = UUID.randomUUID().toString().substring(0, 10);

@@ -113,6 +113,9 @@
 								<!-- Complex persistence impls with extensive native queries -->
 								<exclude>**/persistence/impl/AgentGoalRepositoryImpl*</exclude>
 								<exclude>**/persistence/impl/SystemConfigRepositoryImpl*</exclude>
+								<!-- Payment processing — requires external gateway (integration-test territory) -->
+								<exclude>**/usecases/PaymentImpl*</exclude>
+								<exclude>**/controllers/PaymentController*</exclude>
 							</excludes>
 							<rules>
 								<rule>

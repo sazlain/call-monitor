@@ -29,10 +29,15 @@ public class JwtUtil {
     }
 
     public String generateToken(Long userId, String email, Set<Role> roles, String extension) {
+        return generateToken(userId, email, roles, extension, null);
+    }
+
+    public String generateToken(Long userId, String email, Set<Role> roles, String extension, String sessionId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("roles", roles.stream().map(Role::name).collect(Collectors.toList()));
-        if (extension != null) claims.put("extension", extension);
+        if (extension  != null) claims.put("extension",  extension);
+        if (sessionId  != null) claims.put("sessionId",  sessionId);
 
         return Jwts.builder()
                 .claims(claims).subject(email).issuedAt(new Date())
@@ -54,6 +59,11 @@ public class JwtUtil {
 
     public String extractExtension(String token) {
         return (String) parseClaims(token).get("extension");
+    }
+
+    /** Devuelve el sessionId embebido en el token, o null si no tiene (ADMIN / SUPER_ADMIN). */
+    public String extractSessionId(String token) {
+        return (String) parseClaims(token).get("sessionId");
     }
 
     public boolean isTokenValid(String token) {

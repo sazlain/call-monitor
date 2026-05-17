@@ -1,6 +1,7 @@
 package com.monitor.call.infrastructure.controllers;
 
 import com.monitor.call.infrastructure.adapters.in.controllers.DefaultController;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,7 @@ class DefaultControllerTest {
     private MockMvc mvc;
 
     @MockitoBean private JwtUtil jwtUtil;
+    @MockitoBean private UserJpaRepository userJpaRepository;
 
     @Test
     void hello_returns200WithHelloWorld() throws Exception {

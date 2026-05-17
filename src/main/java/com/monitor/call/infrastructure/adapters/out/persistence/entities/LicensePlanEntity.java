@@ -27,8 +27,29 @@ public class LicensePlanEntity {
     @Column(name = "default_max_agents", nullable = false)
     private Integer defaultMaxAgents;
 
+    /** Cantidad de call agents incluidos por defecto en este plan */
+    @Column(name = "default_max_call_agents")
+    @Builder.Default
+    private Integer defaultMaxCallAgents = 0;
+
+    /** Cantidad de sales agents incluidos por defecto en este plan */
+    @Column(name = "default_max_sales_agents")
+    @Builder.Default
+    private Integer defaultMaxSalesAgents = 0;
+
+    /** Precio base fijo del plan (puede ser 0) */
     @Column(name = "price", nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
+
+    /** Precio mensual por cada slot de Call Agent adquirido */
+    @Column(name = "price_per_call_agent", precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal pricePerCallAgent = BigDecimal.ZERO;
+
+    /** Precio mensual por cada slot de Sales Agent adquirido */
+    @Column(name = "price_per_sales_agent", precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal pricePerSalesAgent = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "billing_cycle", nullable = false)

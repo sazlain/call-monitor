@@ -14,6 +14,8 @@ import java.time.ZoneOffset;
 public class UpdateLicenseRequest {
     private String planName;
     private Integer maxAgents;
+    private Integer maxCallAgents;
+    private Integer maxSalesAgents;
     private LicenseStatus status;
     private BillingCycle billingCycle;
     private BigDecimal priceMonthly;

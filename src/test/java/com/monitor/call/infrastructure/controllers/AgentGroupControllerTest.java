@@ -3,6 +3,7 @@ package com.monitor.call.infrastructure.controllers;
 import com.monitor.call.domain.ports.in.AgentGroupUseCases;
 import com.monitor.call.domain.responses.AgentGroupResponse;
 import com.monitor.call.infrastructure.adapters.in.controllers.AgentGroupController;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ class AgentGroupControllerTest {
 
     @MockitoBean private AgentGroupUseCases groupUseCases;
     @MockitoBean private JwtUtil jwtUtil;
+    @MockitoBean private UserJpaRepository userJpaRepository;
 
     private static final String AUTH = "Bearer valid-token";
 
