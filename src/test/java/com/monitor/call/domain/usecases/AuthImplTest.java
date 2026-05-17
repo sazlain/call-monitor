@@ -117,42 +117,45 @@ class AuthImplTest {
     }
 
     @Test
-    void login_licensePending_throwsLicensePending() {
+    void login_licensePending_adminAllowedWithStatus() {
+        // ADMIN con licencia PENDING puede entrar; el frontend restringe la UI
         User user = activeUser(Role.ADMIN);
-        when(userRepo.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches("pass123", user.getPassword())).thenReturn(true);
+        stubSuccessfulLogin(user, "token");
         when(licenseRepo.findByAdminId(1L)).thenReturn(Optional.of(
                 License.builder().status(LicenseStatus.PENDING).maxAgents(5).build()));
 
-        assertThatThrownBy(() -> auth.login("test@test.com", "pass123"))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("LICENSE_PENDING");
+        LoginResponse resp = auth.login("test@test.com", "pass123");
+
+        assertThat(resp.getToken()).isEqualTo("token");
+        assertThat(resp.getLicenseStatus()).isEqualTo(LicenseStatus.PENDING);
     }
 
     @Test
-    void login_licenseExpired_throwsLicenseExpired() {
+    void login_licenseExpired_adminAllowedWithStatus() {
+        // ADMIN con licencia EXPIRED puede entrar; el frontend restringe la UI
         User user = activeUser(Role.ADMIN);
-        when(userRepo.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches("pass123", user.getPassword())).thenReturn(true);
+        stubSuccessfulLogin(user, "token");
         when(licenseRepo.findByAdminId(1L)).thenReturn(Optional.of(
                 License.builder().status(LicenseStatus.EXPIRED).maxAgents(5).build()));
 
-        assertThatThrownBy(() -> auth.login("test@test.com", "pass123"))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("LICENSE_EXPIRED");
+        LoginResponse resp = auth.login("test@test.com", "pass123");
+
+        assertThat(resp.getToken()).isEqualTo("token");
+        assertThat(resp.getLicenseStatus()).isEqualTo(LicenseStatus.EXPIRED);
     }
 
     @Test
-    void login_licenseSuspended_throwsLicenseSuspended() {
+    void login_licenseSuspended_adminAllowedWithStatus() {
+        // ADMIN con licencia SUSPENDED puede entrar; el frontend restringe la UI
         User user = activeUser(Role.ADMIN);
-        when(userRepo.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches("pass123", user.getPassword())).thenReturn(true);
+        stubSuccessfulLogin(user, "token");
         when(licenseRepo.findByAdminId(1L)).thenReturn(Optional.of(
                 License.builder().status(LicenseStatus.SUSPENDED).maxAgents(5).build()));
 
-        assertThatThrownBy(() -> auth.login("test@test.com", "pass123"))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("LICENSE_SUSPENDED");
+        LoginResponse resp = auth.login("test@test.com", "pass123");
+
+        assertThat(resp.getToken()).isEqualTo("token");
+        assertThat(resp.getLicenseStatus()).isEqualTo(LicenseStatus.SUSPENDED);
     }
 
     @Test
