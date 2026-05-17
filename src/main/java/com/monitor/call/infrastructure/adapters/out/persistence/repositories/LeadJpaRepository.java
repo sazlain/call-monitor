@@ -61,4 +61,11 @@ public interface LeadJpaRepository extends JpaRepository<LeadEntity, Long>,
 
     @Query("SELECT l FROM LeadEntity l WHERE REPLACE(REPLACE(REPLACE(l.contactPhone, '+', ''), '-', ''), ' ', '') LIKE CONCAT('%', :suffix) AND l.status NOT IN ('DISCARDED', 'CONVERTED') ORDER BY l.createdAt DESC")
     List<LeadEntity> findActiveByContactPhoneSuffix(@Param("suffix") String suffix);
+
+    /**
+     * Comprueba si el agente ya tiene un lead activo (PENDING o CALLED).
+     * Se usa para aplicar la regla de "un lead a la vez" en el modo público.
+     */
+    @Query("SELECT COUNT(l) > 0 FROM LeadEntity l WHERE l.assignedAgentId = :agentId AND l.status IN ('PENDING', 'CALLED')")
+    boolean hasActiveLead(@Param("agentId") Long agentId);
 }

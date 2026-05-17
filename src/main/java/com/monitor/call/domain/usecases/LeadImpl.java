@@ -6,11 +6,13 @@ import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.models.Lead;
 import com.monitor.call.domain.ports.in.LeadUseCases;
 import com.monitor.call.domain.ports.in.SystemConfigUseCases;
+import com.monitor.call.domain.exceptions.ConflictException;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
 import com.monitor.call.domain.ports.out.LeadRepositoryPort;
 import com.monitor.call.domain.responses.BulkLeadResponse;
 import com.monitor.call.domain.responses.LeadResponse;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LeadJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.requests.CreateLeadRequest;
 import com.monitor.call.infrastructure.mappers.LeadMapper;
@@ -33,6 +35,7 @@ public class LeadImpl implements LeadUseCases {
     private static final Logger logger = LoggerFactory.getLogger(LeadImpl.class);
 
     private final LeadRepositoryPort leadRepo;
+    private final LeadJpaRepository leadJpaRepo;
     private final UserJpaRepository userRepo;
     private final AgentJpaRepository agentRepo;
     private final AgentRepositoryPort agentRepositoryPort;
@@ -42,11 +45,13 @@ public class LeadImpl implements LeadUseCases {
     private final Map<Long, AtomicInteger> roundRobinIndex = new ConcurrentHashMap<>();
 
     public LeadImpl(LeadRepositoryPort leadRepo,
+                    LeadJpaRepository leadJpaRepo,
                     UserJpaRepository userRepo,
                     AgentJpaRepository agentRepo,
                     AgentRepositoryPort agentRepositoryPort,
                     SystemConfigUseCases configUseCases) {
         this.leadRepo = leadRepo;
+        this.leadJpaRepo = leadJpaRepo;
         this.userRepo = userRepo;
         this.agentRepo = agentRepo;
         this.agentRepositoryPort = agentRepositoryPort;
@@ -187,7 +192,14 @@ public class LeadImpl implements LeadUseCases {
                 ? leadRepo.findPublicLeadsForAgent(adminId, agentId)
                 : leadRepo.findAssignedPendingLeads(agentId);
 
-        return leads.stream().map(this::toResponse).toList();
+        return leads.stream().map(lead -> {
+            LeadResponse r = toResponse(lead);
+            // Ocultar notas en leads del pool que aún no son de este agente
+            if (isPublic && !agentId.equals(lead.getAssignedAgentId())) {
+                r.setNotes(null);
+            }
+            return r;
+        }).toList();
     }
 
     @Override
@@ -228,11 +240,26 @@ public class LeadImpl implements LeadUseCases {
     public LeadResponse takeLead(Long leadId, Long userId) {
         var agentEntity = agentRepo.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Agente no encontrado para userId: " + userId));
+        Long agentId = agentEntity.getId();
+
+        // Regla: un lead a la vez — no puede tomar otro si ya tiene uno PENDING o CALLED
+        if (leadJpaRepo.hasActiveLead(agentId)) {
+            throw new ConflictException(
+                "Ya tienes un lead activo. Debes contactar al cliente anterior antes de tomar uno nuevo."
+            );
+        }
+
         Lead lead = leadRepo.findById(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead no encontrado"));
-        lead.setAssignedAgentId(agentEntity.getId());
+
+        // Si ya está asignado a otro agente, rechazar
+        if (lead.getAssignedAgentId() != null && !lead.getAssignedAgentId().equals(agentId)) {
+            throw new ConflictException("Este lead ya fue tomado por otro agente.");
+        }
+
+        lead.setAssignedAgentId(agentId);
         lead.setStatus(LeadStatus.PENDING);
-        logger.info("Lead {} tomado por agente {} (userId={})", leadId, agentEntity.getId(), userId);
+        logger.info("Lead {} tomado por agente {} (userId={})", leadId, agentId, userId);
         return toResponse(leadRepo.save(lead));
     }
 
@@ -254,6 +281,11 @@ public class LeadImpl implements LeadUseCases {
     public List<LeadResponse> findAllByPhone(String phone) {
         if (phone == null || phone.isBlank()) return List.of();
         return leadRepo.findAllActiveByPhone(phone).stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    public Long resolveAgentId(Long userId) {
+        return agentRepo.findByUserId(userId).map(a -> a.getId()).orElse(null);
     }
 
     public LeadResponse updateLeadStatus(Long leadId, LeadStatus status, LocalDate callbackDate) {

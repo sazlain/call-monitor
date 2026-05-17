@@ -20,4 +20,6 @@ public interface LeadUseCases {
     void discardLead(Long leadId, Long requesterId);
     LeadResponse updateLeadStatus(Long leadId, LeadStatus status, LocalDate callbackDate);
     List<LeadResponse> findAllByPhone(String phone);
+    /** Devuelve el agentId (PK de agents) para un userId dado, o null si no existe. */
+    Long resolveAgentId(Long userId);
 }
