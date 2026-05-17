@@ -3,6 +3,7 @@ package com.monitor.call.infrastructure.adapters.in.controllers;
 import com.monitor.call.domain.enums.LicenseStatus;
 import com.monitor.call.domain.enums.Role;
 import com.monitor.call.domain.responses.AdminSummaryResponse;
+import com.monitor.call.domain.responses.AdminTeamResponse;
 import com.monitor.call.domain.responses.LicensePlanResponse;
 import com.monitor.call.domain.responses.LicenseResponse;
 import com.monitor.call.domain.responses.SuperAdminStatsResponse;
@@ -130,6 +131,54 @@ public class SuperAdminController {
         }).toList();
 
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/admins/{adminId}/team")
+    @Operation(summary = "Agentes de llamada y sales agents asociados a un admin")
+    public ResponseEntity<AdminTeamResponse> getAdminTeam(@PathVariable Long adminId) {
+        userRepo.findById(adminId)
+                .orElseThrow(() -> new com.monitor.call.domain.exceptions.NotFoundException("Admin no encontrado: " + adminId));
+
+        // Call agents (resueltos por group.adminId)
+        List<com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity> agents =
+                agentRepo.findByAdminId(adminId);
+
+        List<AdminTeamResponse.CallAgentEntry> callAgents = agents.stream().map(a -> {
+            UserEntity user = userRepo.findById(a.getUserId()).orElse(null);
+            return AdminTeamResponse.CallAgentEntry.builder()
+                    .agentId(a.getId())
+                    .userId(a.getUserId())
+                    .name(user != null ? user.getName() : "—")
+                    .email(user != null ? user.getEmail() : "—")
+                    .extension(a.getExtension())
+                    .active(a.getActive())
+                    .groupName(a.getGroup() != null ? a.getGroup().getName() : null)
+                    .build();
+        }).toList();
+
+        // Sales agents (resueltos por user.adminId)
+        List<UserEntity> salesUsers = userRepo.findByRoleAndAdminId(Role.SALES_AGENT, adminId);
+        List<AdminTeamResponse.SalesAgentEntry> salesAgents = salesUsers.stream().map(sa -> {
+            String callAgentName = null;
+            if (sa.getDefaultCallAgentId() != null) {
+                callAgentName = agentRepo.findById(sa.getDefaultCallAgentId())
+                        .flatMap(a -> userRepo.findById(a.getUserId()))
+                        .map(UserEntity::getName)
+                        .orElse(null);
+            }
+            return AdminTeamResponse.SalesAgentEntry.builder()
+                    .id(sa.getId())
+                    .name(sa.getName())
+                    .email(sa.getEmail())
+                    .active(sa.getActive())
+                    .defaultCallAgentName(callAgentName)
+                    .build();
+        }).toList();
+
+        return ResponseEntity.ok(AdminTeamResponse.builder()
+                .callAgents(callAgents)
+                .salesAgents(salesAgents)
+                .build());
     }
 
     @PostMapping("/admins")
