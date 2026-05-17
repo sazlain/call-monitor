@@ -16,6 +16,8 @@ public class PaymentSubmissionResponse {
     private Long licenseId;
     private PaymentMethodResponse paymentMethod;
     private BigDecimal amount;
+    private Integer additionalCallAgents;
+    private Integer additionalSalesAgents;
     private String originalFilename;
     private String fileContentType;
     private PaymentStatus status;

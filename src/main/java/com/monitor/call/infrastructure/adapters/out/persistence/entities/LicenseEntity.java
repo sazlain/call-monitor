@@ -28,8 +28,19 @@ public class LicenseEntity {
     @Column(name = "plan_name", nullable = false)
     private String planName;
 
+    /** Total de agentes (legado — se mantiene por compatibilidad). Usar maxCallAgents + maxSalesAgents. */
     @Column(name = "max_agents", nullable = false)
     private Integer maxAgents;
+
+    /** Slots de Call Agent contratados */
+    @Column(name = "max_call_agents")
+    @Builder.Default
+    private Integer maxCallAgents = 0;
+
+    /** Slots de Sales Agent contratados */
+    @Column(name = "max_sales_agents")
+    @Builder.Default
+    private Integer maxSalesAgents = 0;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)

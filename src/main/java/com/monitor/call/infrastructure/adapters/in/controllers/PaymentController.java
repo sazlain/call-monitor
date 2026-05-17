@@ -60,17 +60,20 @@ public class PaymentController {
 
     @PostMapping(value = "/api/payments/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Enviar comprobante de pago")
+    @Operation(summary = "Enviar comprobante de pago. Para expansión de usuarios, incluir additionalCallAgents y/o additionalSalesAgents.")
     public ResponseEntity<PaymentSubmissionResponse> submitPayment(
             @RequestHeader("Authorization") String auth,
             @RequestParam(required = false) Long licenseId,
             @RequestParam Long paymentMethodId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String notes,
-            @RequestParam(required = false) MultipartFile file) {
+            @RequestParam(required = false) MultipartFile file,
+            @RequestParam(required = false) Integer additionalCallAgents,
+            @RequestParam(required = false) Integer additionalSalesAgents) {
         Long adminId = jwtUtil.extractUserId(auth.substring(7));
         return ResponseEntity.ok(
-                paymentUseCases.submitPayment(adminId, licenseId, paymentMethodId, amount, notes, file));
+                paymentUseCases.submitPayment(adminId, licenseId, paymentMethodId, amount, notes, file,
+                        additionalCallAgents, additionalSalesAgents));
     }
 
     // ── ADMIN: Mis comprobantes ────────────────────────────────────────────────

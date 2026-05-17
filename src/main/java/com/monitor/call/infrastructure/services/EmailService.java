@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
@@ -35,6 +36,7 @@ public class EmailService {
      * @param subject Asunto
      * @param html    Cuerpo en HTML
      */
+    @Async
     public void send(String to, String subject, String html) {
         if (fromAddress == null || fromAddress.isBlank()) {
             logger.debug("Email no configurado — omitiendo envío a {}: {}", to, subject);

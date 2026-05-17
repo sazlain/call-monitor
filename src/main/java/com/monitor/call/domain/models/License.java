@@ -12,4 +12,6 @@ public class License {
     private Long adminId;
     private LicenseStatus status;
     private Integer maxAgents;
+    private Integer maxCallAgents;
+    private Integer maxSalesAgents;
 }

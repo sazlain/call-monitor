@@ -8,5 +8,7 @@ public class CreateAdminWithLicenseRequest {
     private String email;
     private Long planId;
     private Integer maxAgents;
+    private Integer maxCallAgents;
+    private Integer maxSalesAgents;
     private String notes;
 }

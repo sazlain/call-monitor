@@ -4,6 +4,7 @@ import com.monitor.call.domain.enums.CallResult;
 import com.monitor.call.domain.ports.in.CallTypificationUseCases;
 import com.monitor.call.domain.responses.CallTypificationResponse;
 import com.monitor.call.infrastructure.adapters.in.controllers.CallTypificationController;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ class CallTypificationControllerTest {
 
     @MockitoBean private CallTypificationUseCases typUseCases;
     @MockitoBean private JwtUtil jwtUtil;
+    @MockitoBean private UserJpaRepository userJpaRepository;
 
     private static final String AUTH = "Bearer valid-token";
 

@@ -104,8 +104,10 @@ public class PaymentImpl implements PaymentUseCases {
                 ? planRepo.findById(license.getPlanId()).orElse(null)
                 : null;
 
-        Integer durationDays = (plan != null) ? plan.getDurationDays() : 30;
-        BigDecimal price = (plan != null) ? plan.getPrice() : license.getPriceMonthly();
+        Integer durationDays       = (plan != null) ? plan.getDurationDays()        : 30;
+        BigDecimal price           = (plan != null) ? plan.getPrice()               : license.getPriceMonthly();
+        BigDecimal perCallAgent    = (plan != null) ? plan.getPricePerCallAgent()   : null;
+        BigDecimal perSalesAgent   = (plan != null) ? plan.getPricePerSalesAgent()  : null;
 
         return MyLicenseResponse.builder()
                 .licenseId(license.getId())
@@ -113,6 +115,11 @@ public class PaymentImpl implements PaymentUseCases {
                 .billingCycle(license.getBillingCycle())
                 .durationDays(durationDays)
                 .price(price)
+                .maxCallAgents(license.getMaxCallAgents())
+                .maxSalesAgents(license.getMaxSalesAgents())
+                .priceMonthly(license.getPriceMonthly())
+                .pricePerCallAgent(perCallAgent)
+                .pricePerSalesAgent(perSalesAgent)
                 .currentStatus(license.getStatus())
                 .expiresAt(license.getExpirationDate())
                 .startDate(license.getStartDate())
@@ -125,7 +132,9 @@ public class PaymentImpl implements PaymentUseCases {
     @Transactional
     public PaymentSubmissionResponse submitPayment(Long adminId, Long licenseId,
                                                     Long paymentMethodId, BigDecimal amount,
-                                                    String notes, MultipartFile file) {
+                                                    String notes, MultipartFile file,
+                                                    Integer additionalCallAgents,
+                                                    Integer additionalSalesAgents) {
         // Si no se envió licenseId, buscarlo o crear una licencia PENDING automáticamente
         Long resolvedLicenseId = licenseId;
         if (resolvedLicenseId == null) {
@@ -150,6 +159,8 @@ public class PaymentImpl implements PaymentUseCases {
                 .paymentMethodId(paymentMethodId)
                 .amount(amount)
                 .adminNotes(notes)
+                .additionalCallAgents(additionalCallAgents != null && additionalCallAgents > 0 ? additionalCallAgents : null)
+                .additionalSalesAgents(additionalSalesAgents != null && additionalSalesAgents > 0 ? additionalSalesAgents : null)
                 .status(PaymentStatus.PENDING)
                 .build();
         submission = submissionRepo.save(submission);
@@ -201,11 +212,22 @@ public class PaymentImpl implements PaymentUseCases {
         submission.setReviewedAt(OffsetDateTime.now());
         submissionRepo.save(submission);
 
-        // Activar la licencia
-        activateLicense(submission.getLicenseId());
+        boolean isExpansion = (submission.getAdditionalCallAgents() != null && submission.getAdditionalCallAgents() > 0)
+                           || (submission.getAdditionalSalesAgents() != null && submission.getAdditionalSalesAgents() > 0);
+
+        if (isExpansion) {
+            // Expansión de usuarios: sumar slots y recalcular precio, sin cambiar fechas
+            expandLicenseUsers(submission.getLicenseId(),
+                    submission.getAdditionalCallAgents(),
+                    submission.getAdditionalSalesAgents());
+        } else {
+            // Renovación normal: activar licencia (reinicia fechas)
+            activateLicense(submission.getLicenseId());
+        }
 
         // Notificar al admin por email
-        notifyAdmin(submission.getAdminId(), true, notes);
+        notifyAdmin(submission.getAdminId(), true, notes, isExpansion,
+                submission.getAdditionalCallAgents(), submission.getAdditionalSalesAgents());
 
         logger.info("Comprobante {} aprobado por reviewer {}", submissionId, reviewerId);
         return toSubmissionResponse(submission);
@@ -224,7 +246,7 @@ public class PaymentImpl implements PaymentUseCases {
         submissionRepo.save(submission);
 
         // Notificar al admin por email
-        notifyAdmin(submission.getAdminId(), false, notes);
+        notifyAdmin(submission.getAdminId(), false, notes, false, null, null);
 
         logger.info("Comprobante {} rechazado por reviewer {}", submissionId, reviewerId);
         return toSubmissionResponse(submission);
@@ -254,6 +276,37 @@ public class PaymentImpl implements PaymentUseCases {
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private void expandLicenseUsers(Long licenseId, Integer addCallAgents, Integer addSalesAgents) {
+        LicenseEntity license = licenseRepo.findById(licenseId)
+                .orElseThrow(() -> new RuntimeException("Licencia no encontrada: " + licenseId));
+
+        int prevCall  = license.getMaxCallAgents()  != null ? license.getMaxCallAgents()  : 0;
+        int prevSales = license.getMaxSalesAgents() != null ? license.getMaxSalesAgents() : 0;
+        int newCall   = prevCall  + (addCallAgents  != null ? addCallAgents  : 0);
+        int newSales  = prevSales + (addSalesAgents != null ? addSalesAgents : 0);
+
+        license.setMaxCallAgents(newCall);
+        license.setMaxSalesAgents(newSales);
+        license.setMaxAgents(newCall + newSales);
+
+        // Recalcular precio mensual si el plan tiene tarifas por usuario
+        var plan = license.getPlanId() != null ? planRepo.findById(license.getPlanId()).orElse(null) : null;
+        if (plan != null) {
+            java.math.BigDecimal base     = plan.getPrice()              != null ? plan.getPrice()              : java.math.BigDecimal.ZERO;
+            java.math.BigDecimal perCall  = plan.getPricePerCallAgent()  != null ? plan.getPricePerCallAgent()  : java.math.BigDecimal.ZERO;
+            java.math.BigDecimal perSales = plan.getPricePerSalesAgent() != null ? plan.getPricePerSalesAgent() : java.math.BigDecimal.ZERO;
+            license.setPriceMonthly(
+                base.add(perCall.multiply(java.math.BigDecimal.valueOf(newCall)))
+                    .add(perSales.multiply(java.math.BigDecimal.valueOf(newSales)))
+                    .setScale(2, java.math.RoundingMode.HALF_UP)
+            );
+        }
+
+        licenseRepo.save(license);
+        logger.info("Licencia {} expandida: callAgents {} → {}, salesAgents {} → {}, priceMonthly={}",
+                licenseId, prevCall, newCall, prevSales, newSales, license.getPriceMonthly());
+    }
 
     private void activateLicense(Long licenseId) {
         LicenseEntity license = licenseRepo.findById(licenseId)
@@ -295,20 +348,35 @@ public class PaymentImpl implements PaymentUseCases {
         }
     }
 
-    private void notifyAdmin(Long adminId, boolean approved, String reviewerNotes) {
+    private void notifyAdmin(Long adminId, boolean approved, String reviewerNotes,
+                             boolean isExpansion, Integer addCall, Integer addSales) {
         try {
             userRepo.findById(adminId).ifPresent(user -> {
-                String subject = approved
-                        ? "✅ Pago aprobado — Licencia activada"
-                        : "❌ Comprobante de pago rechazado";
-                String body = approved
-                        ? "<h2>Tu pago ha sido aprobado</h2><p>Tu licencia ha sido activada exitosamente.</p>"
-                          + (reviewerNotes != null && !reviewerNotes.isBlank()
-                              ? "<p><strong>Nota:</strong> " + reviewerNotes + "</p>" : "")
-                        : "<h2>Tu comprobante fue rechazado</h2>"
-                          + (reviewerNotes != null && !reviewerNotes.isBlank()
-                              ? "<p><strong>Motivo:</strong> " + reviewerNotes + "</p>" : "")
-                          + "<p>Por favor sube un nuevo comprobante válido.</p>";
+                String subject;
+                String body;
+                if (approved) {
+                    if (isExpansion) {
+                        subject = "✅ Pago aprobado — Usuarios agregados a tu licencia";
+                        StringBuilder added = new StringBuilder();
+                        if (addCall  != null && addCall  > 0) added.append(addCall).append(" Call Agent").append(addCall > 1 ? "s" : "").append(" ");
+                        if (addSales != null && addSales > 0) added.append(addSales).append(" Sales Agent").append(addSales > 1 ? "s" : "");
+                        body = "<h2>Usuarios agregados exitosamente</h2>"
+                             + "<p>Se han incorporado <strong>" + added.toString().trim() + "</strong> a tu licencia.</p>"
+                             + (reviewerNotes != null && !reviewerNotes.isBlank()
+                                 ? "<p><strong>Nota:</strong> " + reviewerNotes + "</p>" : "");
+                    } else {
+                        subject = "✅ Pago aprobado — Licencia activada";
+                        body = "<h2>Tu pago ha sido aprobado</h2><p>Tu licencia ha sido activada exitosamente.</p>"
+                             + (reviewerNotes != null && !reviewerNotes.isBlank()
+                                 ? "<p><strong>Nota:</strong> " + reviewerNotes + "</p>" : "");
+                    }
+                } else {
+                    subject = "❌ Comprobante de pago rechazado";
+                    body = "<h2>Tu comprobante fue rechazado</h2>"
+                         + (reviewerNotes != null && !reviewerNotes.isBlank()
+                             ? "<p><strong>Motivo:</strong> " + reviewerNotes + "</p>" : "")
+                         + "<p>Por favor sube un nuevo comprobante válido.</p>";
+                }
                 emailService.send(user.getEmail(), subject, body);
             });
         } catch (Exception e) {
@@ -340,6 +408,8 @@ public class PaymentImpl implements PaymentUseCases {
                 .licenseId(e.getLicenseId())
                 .paymentMethod(method)
                 .amount(e.getAmount())
+                .additionalCallAgents(e.getAdditionalCallAgents())
+                .additionalSalesAgents(e.getAdditionalSalesAgents())
                 .originalFilename(e.getOriginalFilename())
                 .fileContentType(e.getFileContentType())
                 .status(e.getStatus())

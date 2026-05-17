@@ -3,6 +3,9 @@ package com.monitor.call.infrastructure.adapters.in.controllers;
 import com.monitor.call.domain.enums.LicenseStatus;
 import com.monitor.call.domain.enums.Role;
 import com.monitor.call.domain.responses.AdminSummaryResponse;
+import com.monitor.call.domain.responses.AdminTeamResponse;
+import com.monitor.call.domain.responses.UserPresenceInfo;
+import com.monitor.call.infrastructure.websocket.WebSocketPresenceService;
 import com.monitor.call.domain.responses.LicensePlanResponse;
 import com.monitor.call.domain.responses.LicenseResponse;
 import com.monitor.call.domain.responses.SuperAdminStatsResponse;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 import com.monitor.call.domain.exceptions.ConflictException;
 import com.monitor.call.domain.exceptions.NotFoundException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -54,19 +58,36 @@ public class SuperAdminController {
     private final LicensePlanJpaRepository planRepo;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final WebSocketPresenceService presenceService;
 
     public SuperAdminController(UserJpaRepository userRepo,
                                 AgentJpaRepository agentRepo,
                                 LicenseJpaRepository licenseRepo,
                                 LicensePlanJpaRepository planRepo,
                                 PasswordEncoder passwordEncoder,
-                                EmailService emailService) {
+                                EmailService emailService,
+                                WebSocketPresenceService presenceService) {
         this.userRepo = userRepo;
         this.agentRepo = agentRepo;
         this.licenseRepo = licenseRepo;
         this.planRepo = planRepo;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.presenceService = presenceService;
+    }
+
+    /**
+     * Calcula el precio mensual total de una licencia:
+     *   baseFee + (pricePerCallAgent × callAgents) + (pricePerSalesAgent × salesAgents)
+     */
+    private BigDecimal calcMonthlyPrice(LicensePlanEntity plan, int callAgents, int salesAgents) {
+        BigDecimal base       = plan.getPrice()             != null ? plan.getPrice()             : BigDecimal.ZERO;
+        BigDecimal perCall    = plan.getPricePerCallAgent()  != null ? plan.getPricePerCallAgent()  : BigDecimal.ZERO;
+        BigDecimal perSales   = plan.getPricePerSalesAgent() != null ? plan.getPricePerSalesAgent() : BigDecimal.ZERO;
+        return base
+                .add(perCall.multiply(BigDecimal.valueOf(callAgents)))
+                .add(perSales.multiply(BigDecimal.valueOf(salesAgents)))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     private String generateTempPassword() {
@@ -102,6 +123,15 @@ public class SuperAdminController {
                 .build());
     }
 
+    // ── Presencia en tiempo real ──────────────────────────────────────────────
+
+    @GetMapping("/presence")
+    @Operation(summary = "Snapshot de usuarios conectados vía WebSocket en este momento")
+    public ResponseEntity<WebSocketPresenceService.PresenceBroadcast> getPresence() {
+        List<UserPresenceInfo> users = presenceService.getConnectedUsers();
+        return ResponseEntity.ok(new WebSocketPresenceService.PresenceBroadcast(users, users.size()));
+    }
+
     // ── Admins ────────────────────────────────────────────────────────────────
 
     @GetMapping("/admins")
@@ -120,6 +150,9 @@ public class SuperAdminController {
                     .active(admin.getActive())
                     .usedAgents(usedAgents)
                     .maxAgents(lic != null ? lic.getMaxAgents() : null)
+                    .maxCallAgents(lic != null ? lic.getMaxCallAgents() : null)
+                    .maxSalesAgents(lic != null ? lic.getMaxSalesAgents() : null)
+                    .priceMonthly(lic != null ? lic.getPriceMonthly() : null)
                     .planName(lic != null ? lic.getPlanName() : null)
                     .licenseStatus(lic != null ? lic.getStatus() : null)
                     .licenseId(lic != null ? lic.getId() : null)
@@ -132,11 +165,59 @@ public class SuperAdminController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/admins/{adminId}/team")
+    @Operation(summary = "Agentes de llamada y sales agents asociados a un admin")
+    public ResponseEntity<AdminTeamResponse> getAdminTeam(@PathVariable Long adminId) {
+        userRepo.findById(adminId)
+                .orElseThrow(() -> new com.monitor.call.domain.exceptions.NotFoundException("Admin no encontrado: " + adminId));
+
+        // Call agents (resueltos por group.adminId)
+        List<com.monitor.call.infrastructure.adapters.out.persistence.entities.AgentEntity> agents =
+                agentRepo.findByAdminId(adminId);
+
+        List<AdminTeamResponse.CallAgentEntry> callAgents = agents.stream().map(a -> {
+            UserEntity user = userRepo.findById(a.getUserId()).orElse(null);
+            return AdminTeamResponse.CallAgentEntry.builder()
+                    .agentId(a.getId())
+                    .userId(a.getUserId())
+                    .name(user != null ? user.getName() : "—")
+                    .email(user != null ? user.getEmail() : "—")
+                    .extension(a.getExtension())
+                    .active(a.getActive())
+                    .groupName(a.getGroup() != null ? a.getGroup().getName() : null)
+                    .build();
+        }).toList();
+
+        // Sales agents (resueltos por user.adminId)
+        List<UserEntity> salesUsers = userRepo.findByRoleAndAdminId(Role.SALES_AGENT, adminId);
+        List<AdminTeamResponse.SalesAgentEntry> salesAgents = salesUsers.stream().map(sa -> {
+            String callAgentName = null;
+            if (sa.getDefaultCallAgentId() != null) {
+                callAgentName = agentRepo.findById(sa.getDefaultCallAgentId())
+                        .flatMap(a -> userRepo.findById(a.getUserId()))
+                        .map(UserEntity::getName)
+                        .orElse(null);
+            }
+            return AdminTeamResponse.SalesAgentEntry.builder()
+                    .id(sa.getId())
+                    .name(sa.getName())
+                    .email(sa.getEmail())
+                    .active(sa.getActive())
+                    .defaultCallAgentName(callAgentName)
+                    .build();
+        }).toList();
+
+        return ResponseEntity.ok(AdminTeamResponse.builder()
+                .callAgents(callAgents)
+                .salesAgents(salesAgents)
+                .build());
+    }
+
     @PostMapping("/admins")
     @Transactional
     @Operation(summary = "Crea un nuevo admin y le asigna un plan (licencia en estado PENDIENTE)")
     public ResponseEntity<AdminSummaryResponse> createAdmin(@RequestBody CreateAdminWithLicenseRequest req) {
-        if (userRepo.findByEmail(req.getEmail()).isPresent())
+        if (userRepo.existsByEmail(req.getEmail()))
             throw new ConflictException("El email " + req.getEmail() + " ya existe en el sistema");
 
         LicensePlanEntity plan = planRepo.findById(req.getPlanId())
@@ -153,34 +234,94 @@ public class SuperAdminController {
                 .mustChangePassword(true)
                 .build());
 
-        int maxAgents = req.getMaxAgents() != null ? req.getMaxAgents() : plan.getDefaultMaxAgents();
+        // La tarifa base ya incluye 1 admin + 1 call agent.
+        // El campo maxCallAgents del request representa los call agents ADICIONALES.
+        int additionalCallAgents  = req.getMaxCallAgents()  != null ? req.getMaxCallAgents()  : (plan.getDefaultMaxCallAgents()  != null ? plan.getDefaultMaxCallAgents()  : 0);
+        int additionalSalesAgents = req.getMaxSalesAgents() != null ? req.getMaxSalesAgents() : (plan.getDefaultMaxSalesAgents() != null ? plan.getDefaultMaxSalesAgents() : 0);
+
+        // Total almacenado en la licencia: 1 base + adicionales
+        int maxCallAgents  = 1 + additionalCallAgents;
+        int maxSalesAgents = additionalSalesAgents;
+        int maxAgents      = req.getMaxAgents() != null ? req.getMaxAgents() : plan.getDefaultMaxAgents();
+
+        // El precio se calcula solo sobre los adicionales (la base ya cubre 1 call agent)
+        BigDecimal priceMonthly = calcMonthlyPrice(plan, additionalCallAgents, maxSalesAgents);
 
         LicenseEntity license = licenseRepo.save(LicenseEntity.builder()
                 .adminId(admin.getId())
                 .planId(plan.getId())
                 .planName(plan.getName())
                 .maxAgents(maxAgents)
+                .maxCallAgents(maxCallAgents)
+                .maxSalesAgents(maxSalesAgents)
                 .status(LicenseStatus.PENDING)
                 .billingCycle(plan.getBillingCycle())
-                .priceMonthly(plan.getPrice())
+                .priceMonthly(priceMonthly)
                 .notes(req.getNotes())
                 .build());
 
-        // Enviar email de bienvenida con la clave temporal
+        // Enviar email de bienvenida con credenciales, plan contratado e instrucciones de pago
         try {
             String subject = "🎉 Bienvenido a ZentCall — Tu cuenta ha sido creada";
-            String body = "<h2>¡Hola, " + admin.getName() + "!</h2>"
-                    + "<p>Tu cuenta de administrador en <strong>ZentCall</strong> ha sido creada exitosamente.</p>"
-                    + "<p>Usa las siguientes credenciales para tu primer inicio de sesión:</p>"
-                    + "<table style='border-collapse:collapse;margin:16px 0;'>"
-                    + "<tr><td style='padding:6px 12px;font-weight:bold;'>Email:</td>"
-                    + "<td style='padding:6px 12px;'>" + admin.getEmail() + "</td></tr>"
-                    + "<tr><td style='padding:6px 12px;font-weight:bold;'>Contraseña temporal:</td>"
-                    + "<td style='padding:6px 12px;font-family:monospace;font-size:1.1em;'>" + tempPassword + "</td></tr>"
+            String priceStr = priceMonthly != null
+                    ? String.format("$ %,.0f / mes", priceMonthly.doubleValue()).replace(",", ".")
+                    : "—";
+            String body = "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;'>"
+                    + "<div style='background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:32px 24px;border-radius:12px 12px 0 0;text-align:center;'>"
+                    + "<h1 style='color:#fff;margin:0;font-size:1.6em;'>¡Bienvenido a ZentCall!</h1>"
+                    + "<p style='color:#c7d2fe;margin:8px 0 0;'>Tu cuenta de administrador está lista</p>"
+                    + "</div>"
+                    + "<div style='background:#fff;padding:28px 24px;border:1px solid #e5e7eb;border-top:none;'>"
+                    + "<p style='font-size:1.05em;'>Hola, <strong>" + admin.getName() + "</strong>.</p>"
+                    + "<p>Tu cuenta de administrador en <strong>ZentCall</strong> ha sido creada. "
+                    + "A continuación encontrarás tus credenciales de acceso y el detalle del plan contratado.</p>"
+
+                    // Credenciales
+                    + "<h3 style='color:#4f46e5;border-bottom:2px solid #e0e7ff;padding-bottom:6px;margin-top:24px;'>🔑 Credenciales de acceso</h3>"
+                    + "<table style='border-collapse:collapse;width:100%;margin:12px 0;background:#f9fafb;border-radius:8px;overflow:hidden;'>"
+                    + "<tr><td style='padding:10px 16px;font-weight:bold;color:#6b7280;width:40%;'>Email</td>"
+                    + "<td style='padding:10px 16px;'>" + admin.getEmail() + "</td></tr>"
+                    + "<tr style='background:#f3f4f6;'><td style='padding:10px 16px;font-weight:bold;color:#6b7280;'>Contraseña temporal</td>"
+                    + "<td style='padding:10px 16px;font-family:monospace;font-size:1.15em;letter-spacing:2px;color:#4f46e5;'>"
+                    + tempPassword + "</td></tr>"
                     + "</table>"
-                    + "<p style='color:#e65c00;'><strong>⚠️ Deberás cambiar esta contraseña en tu primer inicio de sesión.</strong></p>"
-                    + "<p>Accede al sistema en: <a href='https://zentcall.com'>zentcall.com</a></p>"
-                    + "<p>Si tienes alguna pregunta, contacta al administrador de la plataforma.</p>";
+                    + "<p style='background:#fff8e1;border-left:4px solid #f59e0b;padding:10px 14px;margin:0;color:#92400e;font-size:0.92em;'>"
+                    + "⚠️ <strong>Deberás cambiar esta contraseña</strong> en tu primer inicio de sesión.</p>"
+
+                    // Plan contratado
+                    + "<h3 style='color:#4f46e5;border-bottom:2px solid #e0e7ff;padding-bottom:6px;margin-top:28px;'>📋 Plan contratado</h3>"
+                    + "<table style='border-collapse:collapse;width:100%;margin:12px 0;background:#f9fafb;border-radius:8px;overflow:hidden;'>"
+                    + "<tr><td style='padding:10px 16px;font-weight:bold;color:#6b7280;width:50%;'>Plan</td>"
+                    + "<td style='padding:10px 16px;font-weight:600;'>" + plan.getName() + "</td></tr>"
+                    + "<tr style='background:#f3f4f6;'><td style='padding:10px 16px;font-weight:bold;color:#6b7280;'>Call Agents</td>"
+                    + "<td style='padding:10px 16px;font-weight:600;'>" + maxCallAgents + " usuario" + (maxCallAgents != 1 ? "s" : "") + "</td></tr>"
+                    + "<tr><td style='padding:10px 16px;font-weight:bold;color:#6b7280;'>Sales Agents</td>"
+                    + "<td style='padding:10px 16px;font-weight:600;'>" + maxSalesAgents + " usuario" + (maxSalesAgents != 1 ? "s" : "") + "</td></tr>"
+                    + "<tr style='background:#f3f4f6;'><td style='padding:10px 16px;font-weight:bold;color:#6b7280;'>Precio mensual</td>"
+                    + "<td style='padding:10px 16px;font-weight:700;color:#4f46e5;font-size:1.1em;'>" + priceStr + "</td></tr>"
+                    + "</table>"
+
+                    // Instrucciones de pago
+                    + "<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:18px 20px;margin-top:24px;'>"
+                    + "<h4 style='margin:0 0 10px;color:#1e40af;'>💳 Pasos para activar tu cuenta</h4>"
+                    + "<ol style='margin:0;padding-left:20px;color:#1e3a8a;line-height:1.8;'>"
+                    + "<li>Ingresa al sistema con las credenciales de arriba.</li>"
+                    + "<li>Cambia tu contraseña temporal cuando el sistema te lo solicite.</li>"
+                    + "<li>Serás redirigido automáticamente a la página de <strong>Pagos</strong>.</li>"
+                    + "<li>Envía tu comprobante de pago por el monto de <strong>" + priceStr + "</strong>.</li>"
+                    + "<li>Una vez verificado el pago, tu cuenta quedará <strong>activa</strong>.</li>"
+                    + "</ol>"
+                    + "</div>"
+
+                    + "<div style='text-align:center;margin-top:28px;'>"
+                    + "<a href='https://zentcall.com' style='background:#4f46e5;color:#fff;padding:12px 32px;"
+                    + "border-radius:8px;text-decoration:none;font-weight:bold;font-size:1em;display:inline-block;'>"
+                    + "Ingresar a ZentCall →</a>"
+                    + "</div>"
+                    + "<p style='color:#9ca3af;font-size:0.85em;margin-top:24px;text-align:center;'>"
+                    + "Si tienes alguna pregunta, contacta al administrador de la plataforma.</p>"
+                    + "</div>"
+                    + "</div>";
             emailService.send(admin.getEmail(), subject, body);
         } catch (Exception e) {
             logger.warn("No se pudo enviar email de bienvenida al admin {}: {}", admin.getEmail(), e.getMessage());
@@ -193,6 +334,9 @@ public class SuperAdminController {
                 .active(admin.getActive())
                 .usedAgents(0)
                 .maxAgents(license.getMaxAgents())
+                .maxCallAgents(license.getMaxCallAgents())
+                .maxSalesAgents(license.getMaxSalesAgents())
+                .priceMonthly(license.getPriceMonthly())
                 .planName(plan.getName())
                 .licenseStatus(LicenseStatus.PENDING)
                 .licenseId(license.getId())
@@ -215,16 +359,21 @@ public class SuperAdminController {
         LicensePlanEntity plan = planRepo.findById(req.getPlanId())
                 .orElseThrow(() -> new NotFoundException("Plan no encontrado: " + req.getPlanId()));
 
-        int maxAgents = req.getMaxAgents() != null ? req.getMaxAgents() : plan.getDefaultMaxAgents();
+        int maxAgents      = req.getMaxAgents()      != null ? req.getMaxAgents()      : plan.getDefaultMaxAgents();
+        int maxCallAgents  = req.getMaxCallAgents()  != null ? req.getMaxCallAgents()  : (plan.getDefaultMaxCallAgents()  != null ? plan.getDefaultMaxCallAgents()  : 0);
+        int maxSalesAgents = req.getMaxSalesAgents() != null ? req.getMaxSalesAgents() : (plan.getDefaultMaxSalesAgents() != null ? plan.getDefaultMaxSalesAgents() : 0);
+        BigDecimal priceMonthly = calcMonthlyPrice(plan, maxCallAgents, maxSalesAgents);
 
         LicenseEntity license = licenseRepo.save(LicenseEntity.builder()
                 .adminId(adminId)
                 .planId(plan.getId())
                 .planName(plan.getName())
                 .maxAgents(maxAgents)
+                .maxCallAgents(maxCallAgents)
+                .maxSalesAgents(maxSalesAgents)
                 .status(LicenseStatus.PENDING)
                 .billingCycle(plan.getBillingCycle())
-                .priceMonthly(plan.getPrice())
+                .priceMonthly(priceMonthly)
                 .notes(req.getNotes())
                 .build());
 
@@ -263,8 +412,12 @@ public class SuperAdminController {
         LicensePlanEntity plan = planRepo.save(LicensePlanEntity.builder()
                 .name(req.getName())
                 .description(req.getDescription())
-                .defaultMaxAgents(req.getDefaultMaxAgents())
-                .price(req.getPrice())
+                .defaultMaxAgents(req.getDefaultMaxAgents() != null ? req.getDefaultMaxAgents() : 0)
+                .defaultMaxCallAgents(req.getDefaultMaxCallAgents() != null ? req.getDefaultMaxCallAgents() : 0)
+                .defaultMaxSalesAgents(req.getDefaultMaxSalesAgents() != null ? req.getDefaultMaxSalesAgents() : 0)
+                .price(req.getPrice() != null ? req.getPrice() : BigDecimal.ZERO)
+                .pricePerCallAgent(req.getPricePerCallAgent() != null ? req.getPricePerCallAgent() : BigDecimal.ZERO)
+                .pricePerSalesAgent(req.getPricePerSalesAgent() != null ? req.getPricePerSalesAgent() : BigDecimal.ZERO)
                 .billingCycle(req.getBillingCycle())
                 .durationDays(req.getDurationDays())
                 .active(true)
@@ -278,12 +431,16 @@ public class SuperAdminController {
                                                            @RequestBody UpdatePlanRequest req) {
         LicensePlanEntity plan = planRepo.findById(planId)
                 .orElseThrow(() -> new NotFoundException("Plan no encontrado: " + planId));
-        if (req.getName() != null)             plan.setName(req.getName());
-        if (req.getDescription() != null)      plan.setDescription(req.getDescription());
-        if (req.getDefaultMaxAgents() != null) plan.setDefaultMaxAgents(req.getDefaultMaxAgents());
-        if (req.getPrice() != null)            plan.setPrice(req.getPrice());
-        if (req.getBillingCycle() != null)     plan.setBillingCycle(req.getBillingCycle());
-        if (req.getDurationDays() != null)     plan.setDurationDays(req.getDurationDays());
+        if (req.getName() != null)                  plan.setName(req.getName());
+        if (req.getDescription() != null)           plan.setDescription(req.getDescription());
+        if (req.getDefaultMaxAgents() != null)      plan.setDefaultMaxAgents(req.getDefaultMaxAgents());
+        if (req.getDefaultMaxCallAgents() != null)  plan.setDefaultMaxCallAgents(req.getDefaultMaxCallAgents());
+        if (req.getDefaultMaxSalesAgents() != null) plan.setDefaultMaxSalesAgents(req.getDefaultMaxSalesAgents());
+        if (req.getPrice() != null)                 plan.setPrice(req.getPrice());
+        if (req.getPricePerCallAgent() != null)     plan.setPricePerCallAgent(req.getPricePerCallAgent());
+        if (req.getPricePerSalesAgent() != null)    plan.setPricePerSalesAgent(req.getPricePerSalesAgent());
+        if (req.getBillingCycle() != null)          plan.setBillingCycle(req.getBillingCycle());
+        if (req.getDurationDays() != null)          plan.setDurationDays(req.getDurationDays());
         return ResponseEntity.ok(toPlanResponse(planRepo.save(plan)));
     }
 
@@ -336,11 +493,25 @@ public class SuperAdminController {
 
         if (req.getPlanName() != null)       license.setPlanName(req.getPlanName());
         if (req.getMaxAgents() != null)      license.setMaxAgents(req.getMaxAgents());
+        if (req.getMaxCallAgents() != null)  license.setMaxCallAgents(req.getMaxCallAgents());
+        if (req.getMaxSalesAgents() != null) license.setMaxSalesAgents(req.getMaxSalesAgents());
         if (req.getStatus() != null)         license.setStatus(req.getStatus());
         if (req.getBillingCycle() != null)   license.setBillingCycle(req.getBillingCycle());
-        if (req.getPriceMonthly() != null)   license.setPriceMonthly(req.getPriceMonthly());
         if (req.getExpirationDate() != null) license.setExpirationDate(req.getExpirationDate());
         if (req.getNotes() != null)          license.setNotes(req.getNotes());
+
+        // Recalcular precio si se proveen cantidades y el plan tiene precios por usuario
+        boolean quantitiesChanged = req.getMaxCallAgents() != null || req.getMaxSalesAgents() != null;
+        if (req.getPriceMonthly() != null) {
+            // Precio manual explícito — tiene prioridad
+            license.setPriceMonthly(req.getPriceMonthly());
+        } else if (quantitiesChanged && license.getPlanId() != null) {
+            planRepo.findById(license.getPlanId()).ifPresent(plan -> {
+                int callAgents  = license.getMaxCallAgents()  != null ? license.getMaxCallAgents()  : 0;
+                int salesAgents = license.getMaxSalesAgents() != null ? license.getMaxSalesAgents() : 0;
+                license.setPriceMonthly(calcMonthlyPrice(plan, callAgents, salesAgents));
+            });
+        }
 
         return ResponseEntity.ok(toLicenseResponse(licenseRepo.save(license)));
     }
@@ -353,7 +524,11 @@ public class SuperAdminController {
                 .name(e.getName())
                 .description(e.getDescription())
                 .defaultMaxAgents(e.getDefaultMaxAgents())
+                .defaultMaxCallAgents(e.getDefaultMaxCallAgents())
+                .defaultMaxSalesAgents(e.getDefaultMaxSalesAgents())
                 .price(e.getPrice())
+                .pricePerCallAgent(e.getPricePerCallAgent())
+                .pricePerSalesAgent(e.getPricePerSalesAgent())
                 .billingCycle(e.getBillingCycle())
                 .durationDays(e.getDurationDays())
                 .active(e.getActive())
@@ -370,6 +545,8 @@ public class SuperAdminController {
                 .planId(e.getPlanId())
                 .planName(e.getPlanName())
                 .maxAgents(e.getMaxAgents())
+                .maxCallAgents(e.getMaxCallAgents())
+                .maxSalesAgents(e.getMaxSalesAgents())
                 .status(e.getStatus())
                 .billingCycle(e.getBillingCycle())
                 .priceMonthly(e.getPriceMonthly())

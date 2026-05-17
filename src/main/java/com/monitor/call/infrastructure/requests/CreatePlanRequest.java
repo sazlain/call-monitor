@@ -10,7 +10,11 @@ public class CreatePlanRequest {
     private String name;
     private String description;
     private Integer defaultMaxAgents;
+    private Integer defaultMaxCallAgents;
+    private Integer defaultMaxSalesAgents;
     private BigDecimal price;
+    private BigDecimal pricePerCallAgent;
+    private BigDecimal pricePerSalesAgent;
     private BillingCycle billingCycle;
     private Integer durationDays;
 }

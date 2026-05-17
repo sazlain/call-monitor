@@ -15,6 +15,8 @@ public class LicenseResponse {
     private Long planId;
     private String planName;
     private Integer maxAgents;
+    private Integer maxCallAgents;
+    private Integer maxSalesAgents;
     private LicenseStatus status;
     private BillingCycle billingCycle;
     private BigDecimal priceMonthly;

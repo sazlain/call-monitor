@@ -55,10 +55,12 @@ public class AgentImpl implements AgentUseCases {
 
         if (adminId != null) {
             licenseRepo.findByAdminId(adminId).ifPresent(license -> {
-                int current = agentRepo.findByAdminId(adminId).size();
-                if (current >= license.getMaxAgents()) {
-                    throw new BusinessRuleException("AGENT_LIMIT_REACHED: límite de "
-                            + license.getMaxAgents() + " agentes alcanzado para este plan");
+                int maxAllowed = license.getMaxCallAgents() != null ? license.getMaxCallAgents() : 0;
+                int current    = agentRepo.findByAdminId(adminId).size();
+                if (current >= maxAllowed) {
+                    throw new BusinessRuleException("CALL_AGENT_LIMIT_REACHED: tu plan permite máximo "
+                            + maxAllowed + " Call Agent" + (maxAllowed == 1 ? "" : "s")
+                            + ". Solicita una expansión de usuarios para agregar más.");
                 }
             });
         }

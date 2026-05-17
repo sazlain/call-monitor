@@ -1,6 +1,7 @@
 package com.monitor.call.infrastructure.adapters.in.controllers;
 
 import com.monitor.call.domain.enums.LeadStatus;
+import com.monitor.call.domain.enums.Role;
 import java.util.Arrays;
 import com.monitor.call.domain.ports.in.LeadUseCases;
 import com.monitor.call.domain.responses.BulkLeadResponse;
@@ -105,8 +106,21 @@ public class LeadController {
     @GetMapping("/{leadId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SALES_AGENT', 'CALL_AGENT')")
     @Operation(summary = "Obtener detalle de un lead")
-    public ResponseEntity<LeadResponse> get(@PathVariable Long leadId) {
-        return ResponseEntity.ok(leadUseCases.getLead(leadId));
+    public ResponseEntity<LeadResponse> get(
+            @PathVariable Long leadId,
+            @RequestHeader("Authorization") String auth) {
+        LeadResponse lead = leadUseCases.getLead(leadId);
+        // CALL_AGENT: ocultar notas si el lead no está asignado a él (lead del pool)
+        String token = auth.substring(7);
+        boolean isCallAgent = jwtUtil.extractRoles(token).contains(Role.CALL_AGENT);
+        if (isCallAgent) {
+            Long userId   = jwtUtil.extractUserId(token);
+            Long agentId  = leadUseCases.resolveAgentId(userId);
+            if (agentId == null || !agentId.equals(lead.getAssignedAgentId())) {
+                lead.setNotes(null);
+            }
+        }
+        return ResponseEntity.ok(lead);
     }
 
     @PutMapping("/{leadId}")

@@ -6,6 +6,7 @@ import com.monitor.call.domain.models.CallEvent;
 import com.monitor.call.domain.ports.in.CallEventListenerUseCases;
 import com.monitor.call.domain.responses.CallEventListenerResponse;
 import com.monitor.call.infrastructure.adapters.in.controllers.CallEventListenerController;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import com.monitor.call.infrastructure.websocket.CallEventWebSocketHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,7 @@ class CallEventListenerControllerTest {
     @MockitoBean private CallEventListenerUseCases useCases;
     @MockitoBean private CallEventWebSocketHandler wsHandler;
     @MockitoBean private JwtUtil jwtUtil;
+    @MockitoBean private UserJpaRepository userJpaRepository;
 
     // ── helpers ─────────────────────────────────────────────────────────────────
 

@@ -95,6 +95,43 @@ SELECT 'Nequi',
        true
 WHERE NOT EXISTS (SELECT 1 FROM payment_methods WHERE name = 'Nequi');
 
+-- ── Plan de licencia por defecto ────────────────────────────────────────────
+-- Tarifa base: $197.000 (incluye 1 admin + 1 call agent)
+-- Call agent adicional: $157.000 c/u
+-- Sales agent: $63.000 c/u
+INSERT INTO license_plans (
+    name,
+    description,
+    default_max_agents,
+    default_max_call_agents,
+    default_max_sales_agents,
+    price,
+    price_per_call_agent,
+    price_per_sales_agent,
+    billing_cycle,
+    duration_days,
+    active,
+    license_count,
+    created_at,
+    updated_at
+)
+SELECT
+    'Plan Estándar',
+    'Plan base que incluye 1 admin y 1 call agent. Agrega call agents o sales agents adicionales según tus necesidades.',
+    1,
+    0,
+    0,
+    197000.00,
+    157000.00,
+    63000.00,
+    'MONTHLY',
+    30,
+    true,
+    0,
+    NOW(),
+    NOW()
+WHERE NOT EXISTS (SELECT 1 FROM license_plans WHERE name = 'Plan Estándar');
+
 -- ============================================================
 -- FIN DEL SCRIPT
 -- ============================================================

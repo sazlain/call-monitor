@@ -43,6 +43,19 @@ public class PaymentSubmissionEntity {
     @Column(nullable = false, length = 20)
     private PaymentStatus status = PaymentStatus.PENDING;
 
+    /**
+     * Slots adicionales de Call Agent solicitados en este pago.
+     * Null = pago de renovación normal (no es una expansión de usuarios).
+     */
+    @Column(name = "additional_call_agents")
+    private Integer additionalCallAgents;
+
+    /**
+     * Slots adicionales de Sales Agent solicitados en este pago.
+     */
+    @Column(name = "additional_sales_agents")
+    private Integer additionalSalesAgents;
+
     @Column(name = "admin_notes", columnDefinition = "TEXT")
     private String adminNotes;
 

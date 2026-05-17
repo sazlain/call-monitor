@@ -26,15 +26,19 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private final JwtFilter jwtFilter;
-    private final WebhookIpFilter webhookIpFilter;
+    private final JwtFilter           jwtFilter;
+    private final WebhookIpFilter     webhookIpFilter;
+    private final SingleSessionFilter singleSessionFilter;
 
     @Value("${app.cors.allowed-origins:*}")
     private String allowedOrigins;
 
-    public SecurityConfig(JwtFilter jwtFilter, WebhookIpFilter webhookIpFilter) {
-        this.jwtFilter = jwtFilter;
-        this.webhookIpFilter = webhookIpFilter;
+    public SecurityConfig(JwtFilter jwtFilter,
+                          WebhookIpFilter webhookIpFilter,
+                          SingleSessionFilter singleSessionFilter) {
+        this.jwtFilter           = jwtFilter;
+        this.webhookIpFilter     = webhookIpFilter;
+        this.singleSessionFilter = singleSessionFilter;
     }
 
     @Bean
@@ -62,6 +66,8 @@ public class SecurityConfig {
                 .requestMatchers("/ws/**").permitAll()
                 // Pagos — ADMIN
                 .requestMatchers("/api/payments/**").hasRole("ADMIN")
+                // Sales Agents — ADMIN
+                .requestMatchers("/api/sales-agents/**").hasRole("ADMIN")
                 // Solo ADMIN
                 .requestMatchers("/api/dashboard/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/groups/**").hasRole("ADMIN")
@@ -89,7 +95,9 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .addFilterBefore(webhookIpFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+            // SingleSessionFilter corre después de JwtFilter para validar sesión única de agentes
+            .addFilterAfter(singleSessionFilter, JwtFilter.class);
 
         return http.build();
     }

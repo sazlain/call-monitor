@@ -11,6 +11,7 @@ public class UserMapper {
                 .id(e.getId()).name(e.getName()).email(e.getEmail())
                 .password(e.getPassword()).active(e.getActive())
                 .roles(e.getRoles()).mustChangePassword(e.getMustChangePassword())
+                .adminId(e.getAdminId()).sessionId(e.getSessionId())
                 .createdAt(e.getCreatedAt()).updatedAt(e.getUpdatedAt()).build();
     }
 
@@ -18,7 +19,8 @@ public class UserMapper {
         return UserEntity.builder()
                 .id(u.getId()).name(u.getName()).email(u.getEmail())
                 .password(u.getPassword()).active(u.getActive())
-                .roles(u.getRoles()).mustChangePassword(u.getMustChangePassword()).build();
+                .roles(u.getRoles()).mustChangePassword(u.getMustChangePassword())
+                .adminId(u.getAdminId()).sessionId(u.getSessionId()).build();
     }
 
     public static UserResponse domainToResponse(User u) {

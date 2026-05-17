@@ -3,6 +3,7 @@ package com.monitor.call.infrastructure.controllers;
 import com.monitor.call.domain.ports.in.DashboardUseCases;
 import com.monitor.call.domain.responses.*;
 import com.monitor.call.infrastructure.adapters.in.controllers.DashboardController;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,7 @@ class DashboardControllerTest {
 
     @MockitoBean private DashboardUseCases dashUseCases;
     @MockitoBean private JwtUtil jwtUtil;
+    @MockitoBean private UserJpaRepository userJpaRepository;
 
     private static final String AUTH = "Bearer valid-token";
 
