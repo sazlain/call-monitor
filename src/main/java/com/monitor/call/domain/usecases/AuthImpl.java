@@ -97,12 +97,13 @@ public class AuthImpl implements AuthUseCases {
 
         LicenseStatus status = license.getStatus();
         boolean isBlocked = status == LicenseStatus.PENDING
+                || status == LicenseStatus.TRIAL
                 || status == LicenseStatus.EXPIRED
                 || status == LicenseStatus.SUSPENDED;
 
         if (isBlocked && !user.getRoles().contains(Role.ADMIN)) {
-            // Agentes no pueden trabajar si el admin no tiene licencia activa
-            logger.warn("Acceso bloqueado a agente: licencia {} para adminId={}", status, adminId);
+            // Agentes y sales agents no pueden trabajar si el admin no tiene licencia activa
+            logger.warn("Acceso bloqueado: licencia {} para adminId={} usuario={}", status, adminId, user.getEmail());
             throw new ForbiddenException("LICENSE_" + status.name());
         }
 
@@ -113,6 +114,11 @@ public class AuthImpl implements AuthUseCases {
         if (user.getRoles().contains(Role.ADMIN)) {
             return user.getId();
         }
+        // SALES_AGENT guarda adminId directamente en la entidad User
+        if (user.getRoles().contains(Role.SALES_AGENT) && user.getAdminId() != null) {
+            return user.getAdminId();
+        }
+        // CALL_AGENT resuelve adminId a través de su registro de agente
         return agentRepo.findByUserId(user.getId())
                 .map(Agent::getAdminId)
                 .orElse(null);

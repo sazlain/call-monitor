@@ -14,6 +14,7 @@ public class User {
     private Boolean active;
     private Set<Role> roles;
     private Boolean mustChangePassword;
+    private Long adminId;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }
