@@ -4,6 +4,7 @@ import com.monitor.call.domain.enums.LicenseStatus;
 import lombok.Builder;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Data @Builder
@@ -14,6 +15,9 @@ public class AdminSummaryResponse {
     private Boolean active;
     private Integer usedAgents;
     private Integer maxAgents;
+    private Integer maxCallAgents;
+    private Integer maxSalesAgents;
+    private BigDecimal priceMonthly;
     private String planName;
     private LicenseStatus licenseStatus;
     private Long licenseId;
