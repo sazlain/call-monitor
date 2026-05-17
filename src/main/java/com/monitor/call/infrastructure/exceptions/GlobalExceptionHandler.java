@@ -16,6 +16,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -118,6 +119,17 @@ public class GlobalExceptionHandler {
         logger.warn("Recurso no encontrado: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(errorOf("ERR404", "Recurso no encontrado", ex.getMessage(), HttpStatus.NOT_FOUND));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
+        String detail = ex.getMostSpecificCause().getMessage();
+        String message = detail != null && detail.contains("Key (email)")
+                ? "El email ya está registrado en el sistema"
+                : "Ya existe un registro con los mismos datos únicos";
+        logger.warn("Integridad de datos violada: {}", detail);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(errorOf("ERR409", "Conflicto", message, HttpStatus.CONFLICT));
     }
 
     @ExceptionHandler(ConflictException.class)

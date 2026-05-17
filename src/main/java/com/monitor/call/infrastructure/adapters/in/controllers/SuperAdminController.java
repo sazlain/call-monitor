@@ -217,7 +217,7 @@ public class SuperAdminController {
     @Transactional
     @Operation(summary = "Crea un nuevo admin y le asigna un plan (licencia en estado PENDIENTE)")
     public ResponseEntity<AdminSummaryResponse> createAdmin(@RequestBody CreateAdminWithLicenseRequest req) {
-        if (userRepo.findByEmail(req.getEmail()).isPresent())
+        if (userRepo.existsByEmail(req.getEmail()))
             throw new ConflictException("El email " + req.getEmail() + " ya existe en el sistema");
 
         LicensePlanEntity plan = planRepo.findById(req.getPlanId())
