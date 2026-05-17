@@ -62,6 +62,8 @@ public class SecurityConfig {
                 .requestMatchers("/ws/**").permitAll()
                 // Pagos — ADMIN
                 .requestMatchers("/api/payments/**").hasRole("ADMIN")
+                // Sales Agents — ADMIN
+                .requestMatchers("/api/sales-agents/**").hasRole("ADMIN")
                 // Solo ADMIN
                 .requestMatchers("/api/dashboard/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/groups/**").hasRole("ADMIN")

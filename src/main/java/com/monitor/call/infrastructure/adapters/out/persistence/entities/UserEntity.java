@@ -42,6 +42,14 @@ public class UserEntity {
     @Builder.Default
     private Boolean mustChangePassword = false;
 
+    /** ID del admin que creó este usuario (usado para SALES_AGENT y CALL_AGENT) */
+    @Column(name = "admin_id")
+    private Long adminId;
+
+    /** ID del agente (Agent) por defecto para auto-asignar leads (usado solo para SALES_AGENT) */
+    @Column(name = "default_call_agent_id")
+    private Long defaultCallAgentId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

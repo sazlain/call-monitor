@@ -1,6 +1,7 @@
 package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.enums.LeadStatus;
+import com.monitor.call.domain.enums.Role;
 import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.models.Lead;
 import com.monitor.call.domain.ports.in.LeadUseCases;
@@ -57,6 +58,10 @@ public class LeadImpl implements LeadUseCases {
     public LeadResponse createLead(CreateLeadRequest request, Long ownerId) {
         Long assignedAgentId = request.getAssignedAgentId();
         if (assignedAgentId == null) {
+            // Si el owner es SALES_AGENT con agente por defecto, usarlo directamente
+            assignedAgentId = resolveSalesAgentDefault(ownerId);
+        }
+        if (assignedAgentId == null) {
             assignedAgentId = resolveRoundRobinAgent(ownerId);
         }
         LeadStatus status = request.getStatus() != null ? request.getStatus() : LeadStatus.PENDING;
@@ -104,7 +109,11 @@ public class LeadImpl implements LeadUseCases {
                 if (req.getContactPhone() == null || req.getContactPhone().isBlank())
                     throw new IllegalArgumentException("Telefono requerido");
 
-                Long rowAgent = req.getAssignedAgentId() != null ? req.getAssignedAgentId() : assignedAgentId;
+                // Para SALES_AGENT: usar el agente por defecto si no se especificó uno
+                Long salesDefault = resolveSalesAgentDefault(ownerId);
+                Long rowAgent = req.getAssignedAgentId() != null ? req.getAssignedAgentId()
+                        : salesDefault != null ? salesDefault
+                        : assignedAgentId;
                 if (rowAgent == null && bulkIndex != null && !agentIds.isEmpty()) {
                     rowAgent = agentIds.get(bulkIndex.getAndIncrement() % agentIds.size());
                 }
@@ -261,6 +270,17 @@ public class LeadImpl implements LeadUseCases {
      * Si el modo de asignación es AUTO_ROUND_ROBIN, devuelve el siguiente agente activo.
      * Devuelve null si el modo es MANUAL o no hay agentes disponibles.
      */
+    /**
+     * Si el owner es un SALES_AGENT con un CALL_AGENT por defecto configurado,
+     * retorna ese agentId para auto-asignar el lead sin pasar por round-robin.
+     */
+    private Long resolveSalesAgentDefault(Long ownerId) {
+        return userRepo.findById(ownerId)
+                .filter(u -> u.getRoles().contains(Role.SALES_AGENT))
+                .map(u -> u.getDefaultCallAgentId())
+                .orElse(null);
+    }
+
     private Long resolveRoundRobinAgent(Long adminId) {
         String mode = configUseCases.getValue(adminId, "leads.assignment_mode");
         if (!"AUTO_ROUND_ROBIN".equalsIgnoreCase(mode)) return null;
