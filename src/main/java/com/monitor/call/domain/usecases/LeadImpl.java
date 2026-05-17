@@ -1,15 +1,18 @@
 package com.monitor.call.domain.usecases;
 
 import com.monitor.call.domain.enums.LeadStatus;
+import com.monitor.call.domain.enums.Role;
 import com.monitor.call.domain.models.Agent;
 import com.monitor.call.domain.models.Lead;
 import com.monitor.call.domain.ports.in.LeadUseCases;
 import com.monitor.call.domain.ports.in.SystemConfigUseCases;
+import com.monitor.call.domain.exceptions.ConflictException;
 import com.monitor.call.domain.ports.out.AgentRepositoryPort;
 import com.monitor.call.domain.ports.out.LeadRepositoryPort;
 import com.monitor.call.domain.responses.BulkLeadResponse;
 import com.monitor.call.domain.responses.LeadResponse;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.AgentJpaRepository;
+import com.monitor.call.infrastructure.adapters.out.persistence.repositories.LeadJpaRepository;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.requests.CreateLeadRequest;
 import com.monitor.call.infrastructure.mappers.LeadMapper;
@@ -32,6 +35,7 @@ public class LeadImpl implements LeadUseCases {
     private static final Logger logger = LoggerFactory.getLogger(LeadImpl.class);
 
     private final LeadRepositoryPort leadRepo;
+    private final LeadJpaRepository leadJpaRepo;
     private final UserJpaRepository userRepo;
     private final AgentJpaRepository agentRepo;
     private final AgentRepositoryPort agentRepositoryPort;
@@ -41,11 +45,13 @@ public class LeadImpl implements LeadUseCases {
     private final Map<Long, AtomicInteger> roundRobinIndex = new ConcurrentHashMap<>();
 
     public LeadImpl(LeadRepositoryPort leadRepo,
+                    LeadJpaRepository leadJpaRepo,
                     UserJpaRepository userRepo,
                     AgentJpaRepository agentRepo,
                     AgentRepositoryPort agentRepositoryPort,
                     SystemConfigUseCases configUseCases) {
         this.leadRepo = leadRepo;
+        this.leadJpaRepo = leadJpaRepo;
         this.userRepo = userRepo;
         this.agentRepo = agentRepo;
         this.agentRepositoryPort = agentRepositoryPort;
@@ -56,6 +62,10 @@ public class LeadImpl implements LeadUseCases {
     @Transactional
     public LeadResponse createLead(CreateLeadRequest request, Long ownerId) {
         Long assignedAgentId = request.getAssignedAgentId();
+        if (assignedAgentId == null) {
+            // Si el owner es SALES_AGENT con agente por defecto, usarlo directamente
+            assignedAgentId = resolveSalesAgentDefault(ownerId);
+        }
         if (assignedAgentId == null) {
             assignedAgentId = resolveRoundRobinAgent(ownerId);
         }
@@ -104,7 +114,11 @@ public class LeadImpl implements LeadUseCases {
                 if (req.getContactPhone() == null || req.getContactPhone().isBlank())
                     throw new IllegalArgumentException("Telefono requerido");
 
-                Long rowAgent = req.getAssignedAgentId() != null ? req.getAssignedAgentId() : assignedAgentId;
+                // Para SALES_AGENT: usar el agente por defecto si no se especificó uno
+                Long salesDefault = resolveSalesAgentDefault(ownerId);
+                Long rowAgent = req.getAssignedAgentId() != null ? req.getAssignedAgentId()
+                        : salesDefault != null ? salesDefault
+                        : assignedAgentId;
                 if (rowAgent == null && bulkIndex != null && !agentIds.isEmpty()) {
                     rowAgent = agentIds.get(bulkIndex.getAndIncrement() % agentIds.size());
                 }
@@ -178,7 +192,14 @@ public class LeadImpl implements LeadUseCases {
                 ? leadRepo.findPublicLeadsForAgent(adminId, agentId)
                 : leadRepo.findAssignedPendingLeads(agentId);
 
-        return leads.stream().map(this::toResponse).toList();
+        return leads.stream().map(lead -> {
+            LeadResponse r = toResponse(lead);
+            // Ocultar notas en leads del pool que aún no son de este agente
+            if (isPublic && !agentId.equals(lead.getAssignedAgentId())) {
+                r.setNotes(null);
+            }
+            return r;
+        }).toList();
     }
 
     @Override
@@ -219,11 +240,26 @@ public class LeadImpl implements LeadUseCases {
     public LeadResponse takeLead(Long leadId, Long userId) {
         var agentEntity = agentRepo.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Agente no encontrado para userId: " + userId));
+        Long agentId = agentEntity.getId();
+
+        // Regla: un lead a la vez — no puede tomar otro si ya tiene uno PENDING o CALLED
+        if (leadJpaRepo.hasActiveLead(agentId)) {
+            throw new ConflictException(
+                "Ya tienes un lead activo. Debes contactar al cliente anterior antes de tomar uno nuevo."
+            );
+        }
+
         Lead lead = leadRepo.findById(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead no encontrado"));
-        lead.setAssignedAgentId(agentEntity.getId());
+
+        // Si ya está asignado a otro agente, rechazar
+        if (lead.getAssignedAgentId() != null && !lead.getAssignedAgentId().equals(agentId)) {
+            throw new ConflictException("Este lead ya fue tomado por otro agente.");
+        }
+
+        lead.setAssignedAgentId(agentId);
         lead.setStatus(LeadStatus.PENDING);
-        logger.info("Lead {} tomado por agente {} (userId={})", leadId, agentEntity.getId(), userId);
+        logger.info("Lead {} tomado por agente {} (userId={})", leadId, agentId, userId);
         return toResponse(leadRepo.save(lead));
     }
 
@@ -247,6 +283,11 @@ public class LeadImpl implements LeadUseCases {
         return leadRepo.findAllActiveByPhone(phone).stream().map(this::toResponse).toList();
     }
 
+    @Override
+    public Long resolveAgentId(Long userId) {
+        return agentRepo.findByUserId(userId).map(a -> a.getId()).orElse(null);
+    }
+
     public LeadResponse updateLeadStatus(Long leadId, LeadStatus status, LocalDate callbackDate) {
         Lead lead = leadRepo.findById(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead no encontrado"));
@@ -261,6 +302,17 @@ public class LeadImpl implements LeadUseCases {
      * Si el modo de asignación es AUTO_ROUND_ROBIN, devuelve el siguiente agente activo.
      * Devuelve null si el modo es MANUAL o no hay agentes disponibles.
      */
+    /**
+     * Si el owner es un SALES_AGENT con un CALL_AGENT por defecto configurado,
+     * retorna ese agentId para auto-asignar el lead sin pasar por round-robin.
+     */
+    private Long resolveSalesAgentDefault(Long ownerId) {
+        return userRepo.findById(ownerId)
+                .filter(u -> u.getRoles().contains(Role.SALES_AGENT))
+                .map(u -> u.getDefaultCallAgentId())
+                .orElse(null);
+    }
+
     private Long resolveRoundRobinAgent(Long adminId) {
         String mode = configUseCases.getValue(adminId, "leads.assignment_mode");
         if (!"AUTO_ROUND_ROBIN".equalsIgnoreCase(mode)) return null;

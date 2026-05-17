@@ -17,5 +17,8 @@ public interface UserJpaRepository extends JpaRepository<UserEntity, Long> {
     @Query("SELECT u FROM UserEntity u JOIN u.roles r WHERE r = :role AND u.active = true")
     List<UserEntity> findByRole(@Param("role") Role role);
 
+    @Query("SELECT u FROM UserEntity u JOIN u.roles r WHERE r = :role AND u.adminId = :adminId AND u.active = true")
+    List<UserEntity> findByRoleAndAdminId(@Param("role") Role role, @Param("adminId") Long adminId);
+
     List<UserEntity> findByActiveTrue();
 }

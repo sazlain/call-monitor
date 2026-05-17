@@ -92,6 +92,17 @@ public class CallEventWebSocketHandler {
             String groupChannel = "/topic/calls/group/" + agent.getGroup().getId();
             messagingTemplate.convertAndSend(groupChannel, message);
         }
+
+        // Notificar al SALES_AGENT propietario del lead (si el lead fue encontrado)
+        if (Boolean.TRUE.equals(message.getLeadFound()) && message.getLeadId() != null) {
+            leadRepo.findById(message.getLeadId()).ifPresent(lead -> {
+                if (lead.getOwnerId() != null) {
+                    String ownerChannel = "/topic/leads/owner/" + lead.getOwnerId();
+                    messagingTemplate.convertAndSend(ownerChannel, message);
+                    logger.debug("WS emitido a sales agent owner {}: leadId={}", lead.getOwnerId(), lead.getId());
+                }
+            });
+        }
     }
 
     public String normalizeExtension(String rawExtension) {

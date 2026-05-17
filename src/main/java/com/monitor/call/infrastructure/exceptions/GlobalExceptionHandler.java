@@ -206,6 +206,15 @@ public class GlobalExceptionHandler {
             error.setHttpStatus(HttpStatus.FORBIDDEN);
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
         }
+        if (message.equals("LICENSE_TRIAL")) {
+            logger.warn("Acceso bloqueado por licencia en período de prueba sin activar");
+            ErrorResponse error = new ErrorResponse();
+            error.setId("ERR403");
+            error.setTitle("Licencia en período de prueba");
+            error.setMessage("La licencia de tu organización está en período de prueba. Contacta al administrador de la plataforma.");
+            error.setHttpStatus(HttpStatus.FORBIDDEN);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        }
 
         // Detectar conflictos (duplicados)
         if (message.toLowerCase().contains("ya existe") ||
