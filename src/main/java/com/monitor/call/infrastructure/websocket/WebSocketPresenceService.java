@@ -6,9 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import java.time.OffsetDateTime;
@@ -17,15 +15,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Rastrea qué usuarios tienen sesiones WebSocket activas y emite actualizaciones
- * en tiempo real al canal /topic/presence/superadmin.
+ * Rastrea sesiones WebSocket activas y emite actualizaciones en tiempo real
+ * al canal /topic/presence/superadmin.
  *
- * Flujo:
- *  1. JwtChannelInterceptor extrae userId/name/email/roles del STOMP CONNECT y los
- *     guarda en los atributos de sesión.
- *  2. onConnect lee esos atributos y registra la sesión en el mapa interno.
- *  3. onDisconnect elimina la sesión del mapa.
- *  4. Ambos eventos disparan un broadcast hacia el super admin.
+ * Registro:   JwtChannelInterceptor llama a registerSession() al interceptar CONNECT.
+ * Baja:       onDisconnect() escucha SessionDisconnectEvent de Spring.
+ *
+ * Se evita escuchar SessionConnectedEvent porque ese evento envuelve el frame CONNECTED
+ * (respuesta del servidor) y no garantiza acceso a los atributos del frame CONNECT original.
  */
 @Service
 public class WebSocketPresenceService {
@@ -42,24 +39,13 @@ public class WebSocketPresenceService {
         this.messagingTemplate = messagingTemplate;
     }
 
-    // ── Eventos de ciclo de vida ───────────────────────────────────────────────
+    // ── API pública ────────────────────────────────────────────────────────────
 
-    @EventListener
-    public void onConnect(SessionConnectedEvent event) {
-        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
-        String sessionId = accessor.getSessionId();
-        Map<String, Object> attrs = accessor.getSessionAttributes();
-
-        if (sessionId == null || attrs == null) return;
-
-        Long userId = (Long) attrs.get("ws_userId");
-        if (userId == null) return; // conexión sin token (ignorar)
-
-        String name   = (String) attrs.getOrDefault("ws_name", "Desconocido");
-        String email  = (String) attrs.getOrDefault("ws_email", "");
-        @SuppressWarnings("unchecked")
-        Set<Role> roles = (Set<Role>) attrs.getOrDefault("ws_roles", Set.of());
-
+    /**
+     * Llamado por JwtChannelInterceptor al procesar el STOMP CONNECT.
+     * Si la sesión ya existía (reconexión), la sobreescribe.
+     */
+    public void registerSession(String sessionId, Long userId, String name, String email, Set<Role> roles) {
         sessions.put(sessionId, UserPresenceInfo.builder()
                 .sessionId(sessionId)
                 .userId(userId)
@@ -68,26 +54,13 @@ public class WebSocketPresenceService {
                 .roles(roles)
                 .connectedAt(OffsetDateTime.now())
                 .build());
-
-        logger.info("WS conectado: {} ({}) | session={} | total={}", name, email, sessionId, sessions.size());
+        logger.info("WS conectado: {} ({}) | session={} | total sesiones={}", name, email, sessionId, sessions.size());
         broadcast();
     }
 
-    @EventListener
-    public void onDisconnect(SessionDisconnectEvent event) {
-        String sessionId = event.getSessionId();
-        UserPresenceInfo removed = sessions.remove(sessionId);
-        if (removed != null) {
-            logger.info("WS desconectado: {} ({}) | session={} | total={}", removed.getName(), removed.getEmail(), sessionId, sessions.size());
-            broadcast();
-        }
-    }
-
-    // ── API pública ────────────────────────────────────────────────────────────
-
     /**
-     * Lista de usuarios conectados, deduplicados por userId (se conserva la sesión
-     * más antigua para cada usuario), ordenados por connectedAt ascendente.
+     * Lista de usuarios únicos conectados (dedup por userId, se conserva la sesión
+     * más antigua), ordenados por connectedAt ascendente.
      */
     public List<UserPresenceInfo> getConnectedUsers() {
         return sessions.values().stream()
@@ -102,16 +75,29 @@ public class WebSocketPresenceService {
                 .toList();
     }
 
-    /** Número total de sesiones abiertas (incluye múltiples pestañas del mismo usuario). */
+    /** Número real de sesiones abiertas (incluye múltiples pestañas del mismo usuario). */
     public int getTotalSessions() { return sessions.size(); }
+
+    // ── Evento de desconexión ─────────────────────────────────────────────────
+
+    @EventListener
+    public void onDisconnect(SessionDisconnectEvent event) {
+        String sessionId = event.getSessionId();
+        UserPresenceInfo removed = sessions.remove(sessionId);
+        if (removed != null) {
+            logger.info("WS desconectado: {} ({}) | session={} | total sesiones={}",
+                    removed.getName(), removed.getEmail(), sessionId, sessions.size());
+            broadcast();
+        }
+    }
 
     // ── Broadcast ─────────────────────────────────────────────────────────────
 
     private void broadcast() {
         try {
             List<UserPresenceInfo> users = getConnectedUsers();
-            PresenceBroadcast payload = new PresenceBroadcast(users, users.size());
-            messagingTemplate.convertAndSend(PRESENCE_TOPIC, payload);
+            messagingTemplate.convertAndSend(PRESENCE_TOPIC, new PresenceBroadcast(users, users.size()));
+            logger.debug("Presencia emitida: {} usuario(s) únicos, {} sesiones", users.size(), sessions.size());
         } catch (Exception e) {
             logger.warn("Error emitiendo presencia: {}", e.getMessage());
         }

@@ -1,9 +1,12 @@
 package com.monitor.call.infrastructure.websocket;
 
+import com.monitor.call.domain.enums.Role;
 import com.monitor.call.infrastructure.adapters.out.persistence.repositories.UserJpaRepository;
 import com.monitor.call.infrastructure.security.JwtUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -12,13 +15,15 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
+import java.util.Set;
 
 /**
- * Intercepta el STOMP CONNECT e inyecta el identity del usuario en los atributos
- * de sesión para que WebSocketPresenceService pueda leerlos en SessionConnectedEvent.
+ * Intercepta el STOMP CONNECT, valida el JWT y registra la sesión directamente
+ * en WebSocketPresenceService.
  *
- * Los atributos se prefijan con "ws_" para evitar colisiones.
+ * Nota: WebSocketPresenceService se inyecta con @Lazy para evitar la dependencia
+ * circular WebSocketConfig → JwtChannelInterceptor → WebSocketPresenceService
+ *                          → SimpMessagingTemplate → (infraestructura WS de Spring).
  */
 @Component
 public class JwtChannelInterceptor implements ChannelInterceptor {
@@ -27,6 +32,10 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
 
     private final JwtUtil jwtUtil;
     private final UserJpaRepository userRepo;
+
+    /** @Lazy rompe la dependencia circular con SimpMessagingTemplate */
+    @Autowired @Lazy
+    private WebSocketPresenceService presenceService;
 
     public JwtChannelInterceptor(JwtUtil jwtUtil, UserJpaRepository userRepo) {
         this.jwtUtil  = jwtUtil;
@@ -47,25 +56,27 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
 
         String token = auth.substring(7);
         try {
-            if (!jwtUtil.isTokenValid(token)) return message;
-
-            Long userId  = jwtUtil.extractUserId(token);
-            String email = jwtUtil.extractEmail(token);
-            String name  = userRepo.findById(userId)
-                    .map(u -> u.getName())
-                    .orElse(email);
-
-            Map<String, Object> attrs = accessor.getSessionAttributes();
-            if (attrs != null) {
-                attrs.put("ws_userId", userId);
-                attrs.put("ws_name",   name);
-                attrs.put("ws_email",  email);
-                attrs.put("ws_roles",  jwtUtil.extractRoles(token));
+            if (!jwtUtil.isTokenValid(token)) {
+                logger.warn("STOMP CONNECT con JWT inválido — sesión sin identidad");
+                return message;
             }
 
-            logger.debug("STOMP CONNECT autenticado: userId={} name={}", userId, name);
+            Long userId      = jwtUtil.extractUserId(token);
+            String email     = jwtUtil.extractEmail(token);
+            Set<Role> roles  = jwtUtil.extractRoles(token);
+            String name      = userRepo.findById(userId)
+                    .map(u -> u.getName())
+                    .orElse(email);
+            String sessionId = accessor.getSessionId();
+
+            if (sessionId != null) {
+                // Registro directo: evitamos depender de SessionConnectedEvent
+                // cuyo mensaje (frame CONNECTED) no expone los atributos del CONNECT
+                presenceService.registerSession(sessionId, userId, name, email, roles);
+            }
+
         } catch (Exception e) {
-            logger.warn("JWT inválido en STOMP CONNECT: {}", e.getMessage());
+            logger.warn("Error procesando JWT en STOMP CONNECT: {}", e.getMessage());
         }
 
         return message;
