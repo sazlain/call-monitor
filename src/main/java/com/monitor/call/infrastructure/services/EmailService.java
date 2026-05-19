@@ -53,6 +53,7 @@ public class EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(html, true);
+            message.setHeader("X-ElasticEmail-Settings", "TrackClicks=false;TrackOpens=false");
             mailSender.send(message);
             logger.info("Email enviado a {}: {}", to, subject);
         } catch (MessagingException e) {
