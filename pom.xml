@@ -36,8 +36,6 @@
 		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-websocket</artifactId></dependency>
 		<!-- CSV para carga de leads -->
 		<dependency><groupId>com.opencsv</groupId><artifactId>opencsv</artifactId><version>5.9</version></dependency>
-		<!-- Email -->
-		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-mail</artifactId></dependency>
 		<!-- Actuator — expone /actuator/health para el healthcheck de Docker -->
 		<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-actuator</artifactId></dependency>
 		<!-- Thymeleaf (email templates) -->

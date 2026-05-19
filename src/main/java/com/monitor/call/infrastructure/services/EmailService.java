@@ -1,36 +1,43 @@
 package com.monitor.call.infrastructure.services;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
 /**
- * Servicio de envío de correos electrónicos.
- * Si el username de correo no está configurado, los envíos se omiten silenciosamente
+ * Servicio de envío de correos electrónicos via Elastic Email HTTP API v4.
+ * Si el API key no está configurado, los envíos se omiten silenciosamente
  * para no romper el flujo cuando el email no está disponible en el entorno.
  */
 @Service
 public class EmailService {
 
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
+    private static final String API_URL = "https://api.elasticemail.com/v4/emails/transactional";
 
-    private final JavaMailSender mailSender;
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    @Value("${elasticemail.api.key:}")
+    private String apiKey;
 
     @Value("${spring.mail.username:}")
     private String fromAddress;
 
-    public EmailService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
-    }
+    @Value("${elasticemail.from.name:ZentCall}")
+    private String fromName;
 
     /**
-     * Envía un correo HTML.
+     * Envía un correo HTML via Elastic Email HTTP API.
      *
      * @param to      Destinatario
      * @param subject Asunto
@@ -38,25 +45,56 @@ public class EmailService {
      */
     @Async
     public void send(String to, String subject, String html) {
+        if (apiKey == null || apiKey.isBlank()) {
+            logger.debug("Elastic Email API key no configurado — omitiendo envío a {}: {}", to, subject);
+            return;
+        }
         if (fromAddress == null || fromAddress.isBlank()) {
-            logger.debug("Email no configurado — omitiendo envío a {}: {}", to, subject);
+            logger.debug("Email remitente no configurado — omitiendo envío a {}: {}", to, subject);
             return;
         }
         if (to == null || to.isBlank()) {
             logger.debug("Destinatario vacío — omitiendo envío: {}", subject);
             return;
         }
+
+        String escapedHtml = html.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
+        String escapedSubject = subject.replace("\\", "\\\\").replace("\"", "\\\"");
+
+        String body = """
+                {
+                  "Recipients": { "To": ["%s"] },
+                  "Content": {
+                    "Body": [{ "ContentType": "HTML", "Content": "%s" }],
+                    "Subject": "%s",
+                    "From": "%s",
+                    "FromName": "%s"
+                  },
+                  "Options": {
+                    "TrackClicks": false,
+                    "TrackOpens": false,
+                    "IsTransactional": true
+                  }
+                }
+                """.formatted(to, escapedHtml, escapedSubject, fromAddress, fromName);
+
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(fromAddress);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(html, true);
-            message.setHeader("X-ElasticEmail-Settings", "TrackClicks=false;TrackOpens=false");
-            mailSender.send(message);
-            logger.info("Email enviado a {}: {}", to, subject);
-        } catch (MessagingException e) {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(API_URL))
+                    .header("Content-Type", "application/json")
+                    .header("X-ElasticEmail-ApiKey", apiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .timeout(Duration.ofSeconds(15))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                logger.info("Email enviado a {}: {}", to, subject);
+            } else {
+                logger.error("Error al enviar email a {} [{}]: {}", to, response.statusCode(), response.body());
+            }
+        } catch (Exception e) {
             logger.error("Error al enviar email a {}: {}", to, e.getMessage());
         }
     }
